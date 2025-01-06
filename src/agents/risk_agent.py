@@ -74,6 +74,35 @@ class RiskAgent(BaseAgent):
         self.current_value = self.start_balance
         cprint("🛡️ Risk Agent initialized!", "white", "on_blue")
         
+    def calculate_start_balance(self):
+        """Calculate the start balance based on token holdings and their purchase prices."""
+        try:
+            # Fetch current holdings using existing function
+            holdings = n.fetch_wallet_holdings_og(address)  # Use your existing function
+            print("Holdings DataFrame:", holdings)  # Debug print
+            total_start_balance = 0.0
+            
+            for index, row in holdings.iterrows():
+                token = row['Mint Address']
+                amount = row['Amount']
+                
+                # Skip excluded tokens
+                if token in EXCLUDED_TOKENS:
+                    continue
+                
+                # Fetch the median price for the token using the change amount
+                change_amount = amount  # Assuming you want to use the current amount as the change amount
+                median_price = n.get_trade_prices(address, token)  # Use the updated function
+                
+                if median_price is not None:
+                    total_start_balance += amount * median_price
+            
+            return total_start_balance
+        
+        except Exception as e:
+            cprint(f"❌ Error calculating start balance: {str(e)}", "red")
+            return 0.0
+
     def get_portfolio_value(self):
         """Calculate total portfolio value in USD"""
         total_value = 0.0
@@ -231,11 +260,11 @@ class RiskAgent(BaseAgent):
         """Check if PnL limits have been hit"""
         try:
             self.current_value = self.get_portfolio_value()
-            
+
             if USE_PERCENTAGE:
+
                 # Calculate percentage change
                 percent_change = ((self.current_value - self.start_balance) / self.start_balance) * 100
-                
                 if percent_change <= -MAX_LOSS_PERCENT:
                     cprint("\n🛑 MAXIMUM LOSS PERCENTAGE REACHED", "white", "on_red")
                     cprint(f"📉 Loss: {percent_change:.2f}% (Limit: {MAX_LOSS_PERCENT}%)", "red")

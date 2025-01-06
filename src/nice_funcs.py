@@ -1172,3 +1172,44 @@ def get_token_balance_usd(token_mint_address):
     except Exception as e:
         print(f"❌ Error getting token balance: {str(e)}")
         return 0.0
+
+import requests
+import numpy as np
+
+def get_trade_prices(trader_address, token_address, offset=0, limit=100, before_time=0, after_time=0):
+    """Fetch trades for a given trader and calculate the median price for trades matching the token address."""
+    url = f"https://public-api.birdeye.so/trader/txs/seek_by_time?address={trader_address}&offset={offset}&limit={limit}&before_time={before_time}&after_time={after_time}&tx_type=swap"
+    headers = {"X-API-KEY": BIRDEYE_API_KEY}
+    
+    try:
+        response = requests.get(url, headers=headers)        
+        if response.status_code == 200:
+            trades = response.json().get('data', {}).get('items', [])
+            matching_prices = []
+            
+            for trade in trades:                
+                # Check if the trade's token address matches the specified token address
+                if trade['quote']['address'] == token_address:
+                    price = trade['quote'].get('price')
+                    amount = trade['quote'].get('amount')
+                    change_amount = trade['quote'].get('change_amount')
+                    
+                    # Ensure price, amount, and change_amount are not None
+                    if price is not None and amount is not None and change_amount is not None:
+                        if amount == change_amount:
+                            matching_prices.append(price)  # Append the price if it exists
+            
+            if matching_prices:
+                # Calculate the median price
+                median_price = np.median(matching_prices)
+                return median_price
+            
+            cprint(f"❌ No matching trades found for {trader_address} with token {token_address}.", "red")
+            return None
+        else:
+            cprint(f"❌ Failed to fetch trades for {trader_address}. Status Code: {response.status_code}, Message: {response.json().get('message', 'No message')}", "red")
+            return None
+            
+    except Exception as e:
+        cprint(f"❌ Error fetching trades for {trader_address}: {str(e)}", "red")
+        return None

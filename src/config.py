@@ -12,13 +12,13 @@ EXCLUDED_TOKENS = [USDC_ADDRESS, SOL_ADDRESS]
 
 # Token List for Trading 📋
 MONITORED_TOKENS = [
-   # '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',    # 🌬️ FART
+   'CnGb7hJsGdsFyQP2uXNWrUgT5K1tovBA3mNnUZcTpump',    # 🌬️ FART
     # 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',    # 💵 USDC
-     'EXNo6NwQMCJxvChkdEniw4NNzFK8uMsX7QA1MHfUpump',    # 🤖 SWARMZ
+    # 'EXNo6NwQMCJxvChkdEniw4NNzFK8uMsX7QA1MHfUpump',    # 🤖 SWARMZ
     # 'v62Jv9pwMTREWV9f6TetZfMafV254vo99p7HSF25BPr',     # 🎮 GG Solana
     # 'KENJSUYLASHUMfHyy5o4Hp2FdNqZg1AsUPhfH2kYvEP',   # GRIFFAIN
-    # '8x5VqbHA8D7NkD52uNuS5nnt3PwA3pLD34ymskeSo2Wn',    # 🧠 ZEREBRO
-    # 'Df6yfrKC8kZE3KNkrHERKzAetSxbrWeniQfyJY4Jpump',    # 😎 CHILL GUY
+   # '8x5VqbHA8D7NkD52uNuS5nnt3PwA3pLD34ymskeSo2Wn',    # 🧠 ZEREBRO
+    # 'CnGb7hJsGdsFyQP2uXNWrUgT5K1tovBA3mNnUZcTpump',    # 😎 CHILL GUY
     # 'ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY',    # 🌙 MOODENG
     # 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',    # 🐕 WIF
     #'7uCHQdxAz2ojRgEpXRHas1nJAeTTo9b7JWNgpXXi9D9p' # CAT
