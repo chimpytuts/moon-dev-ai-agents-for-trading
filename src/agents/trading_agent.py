@@ -280,16 +280,32 @@ Example format:
             # Check if we have a position
             current_position = n.get_token_balance_usd(token)
             
-            if current_position > 0 and action in ["SELL", "NOTHING"]:
+        if current_position > 0:
+            if action == "SELL":
                 cprint(f"\n🚫 AI Agent recommends {action} for {token}", "white", "on_yellow")
                 cprint(f"💰 Current position: ${current_position:.2f}", "white", "on_blue")
                 try:
                     cprint(f"📉 Closing position with chunk_kill...", "white", "on_cyan")
                     n.chunk_kill(token, max_usd_order_size, slippage)
-                    cprint(f"✅ Successfully closed position", "white", "on_green")
+                    cprint(f"✅ Successfully closed position", "white", "on-green")
                 except Exception as e:
                     cprint(f"❌ Error closing position: {str(e)}", "white", "on_red")
-            elif current_position > 0:
+                
+            elif action == "NOTHING":
+              
+              # Log and keep the position open
+              cprint(f"💡 AI Agent recommends NOTHING for {token}. Current position remains open: ${current_position:.2f}", "white", "on_blue")
+              market_data = collect_all_tokens()  # Ensure you have this function properly defined
+              # Optional: Monitor the position or implement health checks
+              price = n.token_price(token)  # Assuming we have a function to fetch the current price.
+              indicators = self.analyze_market_data(token, market_data)
+    
+              # Decision to log indicators or take action if certain conditions are met
+              if price < indicators['MA20'] and indicators['RSI'] < 30:
+                cprint(f"⚠️ Attention: Current price is below MA20 and RSI indicates oversold for {token}. Consider reviewing this position.", "white", "on_red")
+    
+                
+            else:
                 cprint(f"✨ Keeping position for {token} (${current_position:.2f}) - AI recommends {action}", "white", "on_blue")
 
     def parse_allocation_response(self, response):

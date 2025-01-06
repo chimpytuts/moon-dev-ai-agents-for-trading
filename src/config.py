@@ -12,15 +12,16 @@ EXCLUDED_TOKENS = [USDC_ADDRESS, SOL_ADDRESS]
 
 # Token List for Trading 📋
 MONITORED_TOKENS = [
-    '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',    # 🌬️ FART
+   # '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',    # 🌬️ FART
     # 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',    # 💵 USDC
-    'HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC',    # 🤖 AI16Z
+     'EXNo6NwQMCJxvChkdEniw4NNzFK8uMsX7QA1MHfUpump',    # 🤖 SWARMZ
     # 'v62Jv9pwMTREWV9f6TetZfMafV254vo99p7HSF25BPr',     # 🎮 GG Solana
     # 'KENJSUYLASHUMfHyy5o4Hp2FdNqZg1AsUPhfH2kYvEP',   # GRIFFAIN
     # '8x5VqbHA8D7NkD52uNuS5nnt3PwA3pLD34ymskeSo2Wn',    # 🧠 ZEREBRO
     # 'Df6yfrKC8kZE3KNkrHERKzAetSxbrWeniQfyJY4Jpump',    # 😎 CHILL GUY
     # 'ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY',    # 🌙 MOODENG
     # 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',    # 🐕 WIF
+    #'7uCHQdxAz2ojRgEpXRHas1nJAeTTo9b7JWNgpXXi9D9p' # CAT
 ]
 
 # Moon Dev's Token Trading List 🚀
@@ -29,44 +30,43 @@ tokens_to_trade = MONITORED_TOKENS  # Using the same list for trading
 
 # Token and wallet settings
 symbol = '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump'
-address = '4wgfCBf2WwLSRKLef9iW7JXZ2AfkxUxGM4XcKpHm3Sin' # YOUR WALLET ADDRESS HERE
+address = 'DesWGJAQ7bGrxbndF7dVFoBegKo3KdqLCzFBveZiCXvT'
 
 # Position sizing 🎯
-usd_size = 25  # Size of position to hold
-max_usd_order_size = 3  # Max order size
+usd_size = 43  # Size of position to hold
+max_usd_order_size = 10  # Max order size
 tx_sleep = 30  # Sleep between transactions
 slippage = 199  # Slippage settings
 
 # Risk Management Settings 🛡️
 CASH_PERCENTAGE = 20  # Minimum % to keep in USDC as safety buffer (0-100)
-MAX_POSITION_PERCENTAGE = 30  # Maximum % allocation per position (0-100)
+MAX_POSITION_PERCENTAGE = 10  # Maximum % allocation per position (0-100)
 STOPLOSS_PRICE = 1 # NOT USED YET 1/5/25    
 BREAKOUT_PRICE = .0001 # NOT USED YET 1/5/25
 SLEEP_AFTER_CLOSE = 600  # Prevent overtrading
-
 MAX_LOSS_GAIN_CHECK_HOURS = 12  # How far back to check for max loss/gain limits (in hours)
 SLEEP_BETWEEN_RUNS_MINUTES = 15  # How long to sleep between agent runs 🕒
 
 
-# Max Loss/Gain Settings FOR RISK AGENT 1/5/25
-USE_PERCENTAGE = False  # If True, use percentage-based limits. If False, use USD-based limits
+# Max Loss/Gain Settings
+USE_PERCENTAGE = True  # If True, use percentage-based limits. If False, use USD-based limits
 
 # USD-based limits (used if USE_PERCENTAGE is False)
-MAX_LOSS_USD = 25  # Maximum loss in USD before stopping trading
-MAX_GAIN_USD = 25 # Maximum gain in USD before stopping trading
+MAX_LOSS_USD = 3  # Maximum loss in USD before stopping trading
+MAX_GAIN_USD = 1  # Maximum gain in USD before stopping trading
 
 # USD MINIMUM BALANCE RISK CONTROL
 MINIMUM_BALANCE_USD = 50  # If balance falls below this, risk agent will consider closing all positions
 USE_AI_CONFIRMATION = True  # If True, consult AI before closing positions. If False, close immediately on breach
 
 # Percentage-based limits (used if USE_PERCENTAGE is True)
-MAX_LOSS_PERCENT = 5  # Maximum loss as percentage (e.g., 20 = 20% loss)
-MAX_GAIN_PERCENT = 5  # Maximum gain as percentage (e.g., 50 = 50% gain)
+MAX_LOSS_PERCENT = 20  # Maximum loss as percentage (e.g., 20 = 20% loss)
+MAX_GAIN_PERCENT = 50  # Maximum gain as percentage (e.g., 50 = 50% gain)
 
 # Transaction settings ⚡
 slippage = 199  # 500 = 5% and 50 = .5% slippage
 PRIORITY_FEE = 100000  # ~0.02 USD at current SOL prices
-orders_per_open = 3  # Multiple orders for better fill rates
+orders_per_open = 2  # Multiple orders for better fill rates
 
 # Market maker settings 📊
 buy_under = .0946
