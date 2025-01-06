@@ -660,7 +660,7 @@ def pnl_close(token_mint_address):
     else:
         print(f'for {token_mint_address[:4]} value is {usd_value} and tp is {tp} so not closing...')
 
-def chunk_kill(token_mint_address, max_usd_order_size, slippage):
+def chunk_kill(token_mint_address, slippage):
     """Kill a position in chunks"""
     cprint(f"\n🔪 Moon Dev's AI Agent initiating position exit...", "white", "on_cyan")
     

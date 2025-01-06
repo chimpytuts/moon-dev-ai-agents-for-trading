@@ -36,7 +36,7 @@ def bot():
         # get pos first
         pos = n.get_position(symbol)
         while pos > 0:
-            n.chunk_kill(symbol, max_usd_order_size, slippage)
+            n.chunk_kill(symbol, slippage)
             pos = n.get_position(symbol)
             time.sleep(1)
 
@@ -143,7 +143,7 @@ def bot():
 
         if price < STOPLOSS_PRICE and pos > 0:
             print(f'selling {symbol[-4:]} bc price is {price}  is under {STOPLOSS_PRICE}')
-            n.chunk_kill(symbol, max_usd_order_size, slippage)
+            n.chunk_kill(symbol, slippage)
             print(f'chunk kill complete... thank you moon dev you are my savior 777')
             time.sleep(15)
 
@@ -208,7 +208,7 @@ def bot():
 
         if price > sell_over:
             print(f'selling {symbol[-4:]} bc price is {price} and sell over is {sell_over}')
-            n.chunk_kill(symbol, max_usd_order_size, slippage)
+            n.chunk_kill(symbol, slippage)
             print(f'chunk kill complete... thank you moon dev you are my savior 777')
             time.sleep(15)
 

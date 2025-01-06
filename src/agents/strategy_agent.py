@@ -265,7 +265,7 @@ class StrategyAgent:
                     elif direction == 'SELL':
                         if current_position > 0:
                             print(f"📉 Executing SELL for {token}")
-                            n.chunk_kill(token, max_usd_order_size, slippage)
+                            n.chunk_kill(token, slippage)
                             print(f"✅ Exit complete for {token}")
                         else:
                             print(f"⏸️ No position to sell")

@@ -60,7 +60,7 @@ MINIMUM_BALANCE_USD = 50  # If balance falls below this, risk agent will conside
 USE_AI_CONFIRMATION = True  # If True, consult AI before closing positions. If False, close immediately on breach
 
 # Percentage-based limits (used if USE_PERCENTAGE is True)
-MAX_LOSS_PERCENT = 20  # Maximum loss as percentage (e.g., 20 = 20% loss)
+MAX_LOSS_PERCENT = 5  # Maximum loss as percentage (e.g., 20 = 20% loss)
 MAX_GAIN_PERCENT = 70  # Maximum gain as percentage (e.g., 50 = 50% gain)
 
 # Transaction settings ⚡

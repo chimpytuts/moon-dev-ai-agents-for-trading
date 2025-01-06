@@ -185,6 +185,15 @@ class RiskAgent(BaseAgent):
             cprint(f"❌ Error getting data for {token}: {str(e)}", "white", "on_red")
             return None
 
+    def close_position(self, token):
+        """Close a specific position."""
+        try:
+            cprint(f"💰 Closing position for {token}...", "white", "on_cyan")
+            n.chunk_kill(token, slippage)  # Close the position
+            cprint(f"✅ Successfully closed position for {token}", "white", "on_green")
+        except Exception as e:
+            cprint(f"❌ Error closing position for {token}: {str(e)}", "white", "on_red")
+
     def should_override_limit(self, limit_type):
         """Ask AI if we should override the limit based on recent market data"""
         try:
@@ -197,7 +206,6 @@ class RiskAgent(BaseAgent):
             positions = n.fetch_wallet_holdings_og(address)
             
             # Filter for tokens that are both in MONITORED_TOKENS and in our positions
-            # Exclude USDC and SOL
             positions = positions[
                 positions['Mint Address'].isin(MONITORED_TOKENS) & 
                 ~positions['Mint Address'].isin(EXCLUDED_TOKENS)
@@ -212,49 +220,75 @@ class RiskAgent(BaseAgent):
             for _, row in positions.iterrows():
                 token = row['Mint Address']
                 current_value = row['USD Value']
+                purchase_price = n.get_trade_prices(address, token)  # Assuming you have this data
+                amount = row['Amount']
+                start_value = amount * purchase_price
                 
-                if current_value > 0:  # Double check we have a position
-                    cprint(f"📊 Getting market data for monitored position: {token}", "white", "on_blue")
-                    token_data = self.get_position_data(token)
-                    if token_data:
-                        position_data[token] = {
-                            'value_usd': current_value,
-                            'data': token_data
-                        }
-            
-            if not position_data:
-                cprint("❌ Could not get market data for any monitored positions", "white", "on_red")
-                return False
+                # Calculate loss and gain percentages
+                percent_change = ((current_value - start_value) / start_value) * 100
+                usd_change = current_value - start_value
+
+                if limit_type == "percentage" and percent_change <= -MAX_LOSS_PERCENT:
+                    cprint(f"🛡️ Closing position for {token} due to loss: {percent_change:.2f}%", "white", "on_red")
+                    continue  # Move to the next token
                 
-            # Format data for AI analysis
-            prompt = RISK_OVERRIDE_PROMPT.format(
-                limit_type=limit_type,
-                position_data=json.dumps(position_data, indent=2)
-            )
+                # Check if we should close the position based on loss thresholds
+                if limit_type == "USD" and usd_change <= -MAX_LOSS_USD:
+                    cprint(f"🛡️ Closing position for {token} due to loss: ${-usd_change:.2f}", "white", "on_red")
+                    continue  # Move to the next token
+                
+                # Check if we should keep the position open based on gain thresholds
+                if limit_type == "percentage" and percent_change >= MAX_GAIN_PERCENT:
+                    cprint(f"🤖 Keeping position for {token} open: Gain is {percent_change:.2f}%", "white", "on_yellow")
+                    continue  # Move to the next token
+                
+                if limit_type == "USD" and usd_change >= MAX_GAIN_USD:
+                    cprint(f"🤖 Keeping position for {token} open: Gain is ${usd_change:.2f}", "white", "on_yellow")
+                    continue  # Move to the next token
+
+                # Format data for AI analysis for each token
+                token_data = {
+                    'current_value_usd': current_value,  # Current value in USD
+                    'percent_change': percent_change,      # Change in percentage
+                    'usd_change': usd_change,              # Change in USD
+                    'data': self.get_position_data(token)  # Additional relevant data
+                }
+                
+                position_data[token] = token_data
+
+                # Format prompt for AI analysis
+                prompt = RISK_OVERRIDE_PROMPT.format(
+                    limit_type=limit_type,
+                    position_data=json.dumps({token: token_data}, indent=2)  # Send data for the specific token
+                )
+                
+                cprint(f"🤖 AI Agent analyzing market data for {token}...", "white", "on_green")
+                message = self.client.messages.create(
+                    model=config.AI_MODEL,
+                    max_tokens=config.AI_MAX_TOKENS,
+                    temperature=config.AI_TEMPERATURE,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                # Get the response content and ensure it's a string
+                response = str(message.content) if message.content else ""
+                
+                # Check if we should override (keep position open)
+                override_active = "OVERRIDE" in response.upper()
+                
+                # Print the AI's reasoning
+                cprint(f"\n🧠 Risk Agent Analysis for {token}:", "white", "on_blue")
+                print(response)
+                
+                if override_active:
+                    cprint(f"\n🤖 Risk Agent suggests keeping position for {token} open", "white", "on_yellow")
+                else:
+                    cprint(f"\n🛡️ Risk Agent recommends closing position for {token}", "white", "on_red")
+                    self.close_position(token)  # Close the position if AI suggests it
             
-            cprint("🤖 AI Agent analyzing market data...", "white", "on_green")
-            message = self.client.messages.create(
-                model=config.AI_MODEL,
-                max_tokens=config.AI_MAX_TOKENS,
-                temperature=config.AI_TEMPERATURE,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            # Get the response content and ensure it's a string
-            response = str(message.content) if message.content else ""
+            # Update the last check time
             self.last_override_check = datetime.now()
-            
-            # Check if we should override (keep positions open)
-            self.override_active = "OVERRIDE" in response.upper()
-            
-            # Print the AI's reasoning
-            cprint("\n🧠 Risk Agent Analysis:", "white", "on_blue")
-            print(response)
-            
-            if self.override_active:
-                cprint("\n🤖 Risk Agent suggests keeping positions open", "white", "on_yellow")
-            else:
-                cprint("\n🛡️ Risk Agent recommends closing positions", "white", "on_red")
+            self.override_active = any("OVERRIDE" in response.upper() for response in position_data.values())
             
             return self.override_active
             
@@ -266,7 +300,6 @@ class RiskAgent(BaseAgent):
         """Check if PnL limits have been hit"""
         try:
             self.current_value = self.get_portfolio_value()
-            cprint(f"carlos: {(self.current_value)}")
 
             # Check if there are any monitored tokens in the current value
             holdings = n.fetch_wallet_holdings_og(address)  # Fetch current holdings
@@ -276,9 +309,15 @@ class RiskAgent(BaseAgent):
                 cprint("❌ No monitored tokens found in current holdings.", "white", "on_red")
                 return False  # Return false if no monitored tokens are present
 
+            cprint(f"📊 Full Portfolio Current USD Value: ${self.current_value:.2f}", "white", "on_blue")
+            cprint(f"📈 Full Portfolio Start USD Value: ${self.start_balance:.2f}", "white", "on_blue")
+            percent_change = ((self.current_value - self.start_balance) / self.start_balance) * 100
+            cprint(f"🔄 Portfolio Change: {percent_change:.2f}% since the start", "white", "on_yellow")
+            usd_change = self.current_value - self.start_balance
+            cprint(f"🔄 UsD Change: {usd_change:.2f} USD since the start", "white", "on_yellow")
+
             if USE_PERCENTAGE:
                 # Calculate percentage change
-                percent_change = ((self.current_value - self.start_balance) / self.start_balance) * 100
                 if percent_change <= -MAX_LOSS_PERCENT:
                     cprint("\n🛑 MAXIMUM LOSS PERCENTAGE REACHED", "white", "on_red")
                     cprint(f"📉 Loss: {percent_change:.2f}% (Limit: {MAX_LOSS_PERCENT}%)", "red")
@@ -291,8 +330,6 @@ class RiskAgent(BaseAgent):
                        
             else:
                 # Calculate USD change
-                usd_change = self.current_value - self.start_balance
-                
                 if usd_change <= -MAX_LOSS_USD:
                     cprint("\n🛑 MAXIMUM LOSS USD REACHED", "white", "on_red")
                     cprint(f"📉 Loss: ${abs(usd_change):.2f} (Limit: ${MAX_LOSS_USD:.2f})", "red")
@@ -340,7 +377,7 @@ class RiskAgent(BaseAgent):
                 
                 cprint(f"\n💰 Closing position: {token} (${value:.2f})", "white", "on_cyan")
                 try:
-                    n.chunk_kill(token, max_usd_order_size, slippage)
+                    n.chunk_kill(token, slippage)
                     cprint(f"✅ Successfully closed position for {token}", "white", "on_green")
                 except Exception as e:
                     cprint(f"❌ Error closing position for {token}: {str(e)}", "white", "on_red")
