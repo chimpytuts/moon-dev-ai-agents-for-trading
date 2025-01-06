@@ -79,15 +79,17 @@ class RiskAgent(BaseAgent):
         try:
             # Fetch current holdings using existing function
             holdings = n.fetch_wallet_holdings_og(address)  # Use your existing function
-            print("Holdings DataFrame:", holdings)  # Debug print
             total_start_balance = 0.0
-            
+            excluded_tokens_value = 0.0  # Initialize variable for excluded tokens' USD value
+
             for index, row in holdings.iterrows():
                 token = row['Mint Address']
                 amount = row['Amount']
                 
                 # Skip excluded tokens
                 if token in EXCLUDED_TOKENS:
+                    if token != SOL_ADDRESS:  # Changed !== to !=
+                        excluded_tokens_value += row['USD Value']  # Add USD Value of excluded tokens
                     continue
                 
                 # Fetch the median price for the token using the change amount
@@ -96,6 +98,9 @@ class RiskAgent(BaseAgent):
                 
                 if median_price is not None:
                     total_start_balance += amount * median_price
+            
+            # Add the USD value of excluded tokens to the total start balance
+            total_start_balance += excluded_tokens_value
             
             return total_start_balance
         
@@ -112,6 +117,7 @@ class RiskAgent(BaseAgent):
             usdc_value = n.get_token_balance_usd(config.USDC_ADDRESS)
             total_value += usdc_value
             
+
             # Get balance of each monitored token
             for token in config.MONITORED_TOKENS:
                 if token != config.USDC_ADDRESS:  # Skip USDC as we already counted it
@@ -260,9 +266,17 @@ class RiskAgent(BaseAgent):
         """Check if PnL limits have been hit"""
         try:
             self.current_value = self.get_portfolio_value()
+            cprint(f"carlos: {(self.current_value)}")
+
+            # Check if there are any monitored tokens in the current value
+            holdings = n.fetch_wallet_holdings_og(address)  # Fetch current holdings
+            monitored_positions = holdings[holdings['Mint Address'].isin(MONITORED_TOKENS)]
+
+            if monitored_positions.empty:
+                cprint("❌ No monitored tokens found in current holdings.", "white", "on_red")
+                return False  # Return false if no monitored tokens are present
 
             if USE_PERCENTAGE:
-
                 # Calculate percentage change
                 percent_change = ((self.current_value - self.start_balance) / self.start_balance) * 100
                 if percent_change <= -MAX_LOSS_PERCENT:
@@ -274,7 +288,7 @@ class RiskAgent(BaseAgent):
                     cprint("\n🎯 MAXIMUM GAIN PERCENTAGE REACHED", "white", "on_green")
                     cprint(f"📈 Gain: {percent_change:.2f}% (Limit: {MAX_GAIN_PERCENT}%)", "green")
                     return True
-                    
+                       
             else:
                 # Calculate USD change
                 usd_change = self.current_value - self.start_balance

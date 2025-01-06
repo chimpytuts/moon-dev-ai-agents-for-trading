@@ -12,7 +12,7 @@ EXCLUDED_TOKENS = [USDC_ADDRESS, SOL_ADDRESS]
 
 # Token List for Trading 📋
 MONITORED_TOKENS = [
-   'CnGb7hJsGdsFyQP2uXNWrUgT5K1tovBA3mNnUZcTpump',    # 🌬️ FART
+   'DS6qJNTGJUz26tjC6G75hGXGA6dvEyyiupS7okhLpump',    # 🌬️ FART
     # 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',    # 💵 USDC
     # 'EXNo6NwQMCJxvChkdEniw4NNzFK8uMsX7QA1MHfUpump',    # 🤖 SWARMZ
     # 'v62Jv9pwMTREWV9f6TetZfMafV254vo99p7HSF25BPr',     # 🎮 GG Solana
@@ -33,13 +33,13 @@ symbol = '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump'
 address = 'DesWGJAQ7bGrxbndF7dVFoBegKo3KdqLCzFBveZiCXvT'
 
 # Position sizing 🎯
-usd_size = 43  # Size of position to hold
+usd_size = 68  # Size of position to hold
 max_usd_order_size = 10  # Max order size
 tx_sleep = 30  # Sleep between transactions
 slippage = 199  # Slippage settings
 
 # Risk Management Settings 🛡️
-CASH_PERCENTAGE = 20  # Minimum % to keep in USDC as safety buffer (0-100)
+CASH_PERCENTAGE = 50  # Minimum % to keep in USDC as safety buffer (0-100)
 MAX_POSITION_PERCENTAGE = 10  # Maximum % allocation per position (0-100)
 STOPLOSS_PRICE = 1 # NOT USED YET 1/5/25    
 BREAKOUT_PRICE = .0001 # NOT USED YET 1/5/25
@@ -61,7 +61,7 @@ USE_AI_CONFIRMATION = True  # If True, consult AI before closing positions. If F
 
 # Percentage-based limits (used if USE_PERCENTAGE is True)
 MAX_LOSS_PERCENT = 20  # Maximum loss as percentage (e.g., 20 = 20% loss)
-MAX_GAIN_PERCENT = 50  # Maximum gain as percentage (e.g., 50 = 50% gain)
+MAX_GAIN_PERCENT = 70  # Maximum gain as percentage (e.g., 50 = 50% gain)
 
 # Transaction settings ⚡
 slippage = 199  # 500 = 5% and 50 = .5% slippage
@@ -73,8 +73,8 @@ buy_under = .0946
 sell_over = 1
 
 # Data collection settings 📈
-DAYSBACK_4_DATA = 3
-DATA_TIMEFRAME = '1H'  # 1m, 3m, 5m, 15m, 30m, 1H, 2H, 4H, 6H, 8H, 12H, 1D, 3D, 1W, 1M
+DAYSBACK_4_DATA = 1
+DATA_TIMEFRAME = '15m'  # 1m, 3m, 5m, 15m, 30m, 1H, 2H, 4H, 6H, 8H, 12H, 1D, 3D, 1W, 1M
 SAVE_OHLCV_DATA = False  # 🌙 Set to True to save data permanently, False will only use temp data during run
 
 # AI Model Settings 🤖

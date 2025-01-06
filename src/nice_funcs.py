@@ -21,6 +21,7 @@ import solders
 from dotenv import load_dotenv
 import shutil
 import atexit
+import pytz
 
 # Load environment variables
 load_dotenv()
@@ -338,7 +339,6 @@ def get_time_range(days_back):
 
 def get_data(address, days_back_4_data, timeframe):
     time_from, time_to = get_time_range(days_back_4_data)
-
     # Check temp data first
     temp_file = f"temp_data/{address}_latest.csv"
     if os.path.exists(temp_file):
@@ -353,6 +353,7 @@ def get_data(address, days_back_4_data, timeframe):
         json_response = response.json()
         items = json_response.get('data', {}).get('items', [])
 
+
         processed_data = [{
             'Datetime (UTC)': datetime.utcfromtimestamp(item['unixTime']).strftime('%Y-%m-%d %H:%M:%S'),
             'Open': item['o'],
@@ -363,10 +364,14 @@ def get_data(address, days_back_4_data, timeframe):
         } for item in items]
 
         df = pd.DataFrame(processed_data)
-
         # Remove any rows with dates far in the future
-        current_date = datetime.now()
+        current_date = datetime.now(pytz.utc)  # Ensure current date is in UTC
+
+        # Localize the fetched data to UTC
         df['datetime_obj'] = pd.to_datetime(df['Datetime (UTC)'])
+        df['datetime_obj'] = df['datetime_obj'].dt.tz_localize('UTC')
+
+        # Now filter based on the current date
         df = df[df['datetime_obj'] <= current_date]
         df = df.drop('datetime_obj', axis=1)
 
@@ -1160,7 +1165,7 @@ def get_token_balance_usd(token_mint_address):
     try:
         # Get the position data using existing function
         df = fetch_wallet_token_single(address, token_mint_address)  # Using address from config
-        
+
         if df.empty:
             print(f"🔍 No position found for {token_mint_address[:8]}")
             return 0.0

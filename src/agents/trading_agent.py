@@ -281,6 +281,7 @@ Example format:
             current_position = n.get_token_balance_usd(token)
             
         if current_position > 0:
+            """
             if action == "SELL":
                 cprint(f"\n🚫 AI Agent recommends {action} for {token}", "white", "on_yellow")
                 cprint(f"💰 Current position: ${current_position:.2f}", "white", "on_blue")
@@ -303,10 +304,9 @@ Example format:
               # Decision to log indicators or take action if certain conditions are met
               if price < indicators['MA20'] and indicators['RSI'] < 30:
                 cprint(f"⚠️ Attention: Current price is below MA20 and RSI indicates oversold for {token}. Consider reviewing this position.", "white", "on_red")
-    
-                
             else:
-                cprint(f"✨ Keeping position for {token} (${current_position:.2f}) - AI recommends {action}", "white", "on_blue")
+            """
+            cprint(f"✨ Keeping position for {token} (${current_position:.2f}) - AI recommends {action}", "white", "on_blue")
 
     def parse_allocation_response(self, response):
         """Parse the AI's allocation response and handle both string and TextBlock formats"""
