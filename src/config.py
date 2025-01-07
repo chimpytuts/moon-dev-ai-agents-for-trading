@@ -61,7 +61,15 @@ USE_AI_CONFIRMATION = True  # If True, consult AI before closing positions. If F
 
 # Percentage-based limits (used if USE_PERCENTAGE is True)
 MAX_LOSS_PERCENT = 5  # Maximum loss as percentage (e.g., 20 = 20% loss)
-MAX_GAIN_PERCENT = 70  # Maximum gain as percentage (e.g., 50 = 50% gain)
+MAX_GAIN_PERCENT = 30  # Maximum gain as percentage (e.g., 50 = 50% gain)
+
+# USD-based limits (used if USE_PERCENTAGE is False)
+MAX_LOSS_USD_PER_POSITION = 10  # Maximum loss in USD before stopping trading
+MAX_GAIN_USD_PER_POSITION = 10  # Maximum gain in USD before stopping trading
+
+# Percentage-based limits (used if USE_PERCENTAGE is True)
+MAX_LOSS_PERCENT_PER_POSITION = 50  # Maximum loss as percentage (e.g., 20 = 20% loss)
+MAX_GAIN_PERCENT_PER_POSITION = 50  # Maximum gain as percentage (e.g., 50 = 50% gain)
 
 # Transaction settings ⚡
 slippage = 199  # 500 = 5% and 50 = .5% slippage

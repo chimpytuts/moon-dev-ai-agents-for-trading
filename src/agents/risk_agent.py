@@ -197,11 +197,6 @@ class RiskAgent(BaseAgent):
     def should_override_limit(self, limit_type):
         """Ask AI if we should override the limit based on recent market data"""
         try:
-            # Only check every 15 minutes
-            if (self.last_override_check and 
-                datetime.now() - self.last_override_check < timedelta(minutes=15)):
-                return self.override_active
-            
             # Get current positions first
             positions = n.fetch_wallet_holdings_og(address)
             
@@ -213,8 +208,7 @@ class RiskAgent(BaseAgent):
             
             if positions.empty:
                 cprint("❌ No monitored positions found to analyze", "white", "on_red")
-                return False
-            
+                return
             # Collect data only for monitored tokens we have positions in
             position_data = {}
             for _, row in positions.iterrows():
@@ -223,35 +217,62 @@ class RiskAgent(BaseAgent):
                 purchase_price = n.get_trade_prices(address, token)  # Assuming you have this data
                 amount = row['Amount']
                 start_value = amount * purchase_price
-                
+                type = ""
+                why = ""
+
                 # Calculate loss and gain percentages
                 percent_change = ((current_value - start_value) / start_value) * 100
                 usd_change = current_value - start_value
 
-                if limit_type == "percentage" and percent_change <= -MAX_LOSS_PERCENT:
-                    cprint(f"🛡️ Closing position for {token} due to loss: {percent_change:.2f}%", "white", "on_red")
-                    continue  # Move to the next token
-                
+                # Log the start of analysis for the token
+                cprint(f"🔍 Starting analysis for token: {token}", "white", "on_blue")
+
+                if limit_type == "percentage" and percent_change <= -MAX_LOSS_PERCENT_PER_POSITION:
+                    type = "SELL"
+                    why = f"Sell position for {token} because the loss exceeds the maximum allowed limit of {MAX_LOSS_PERCENT}%. Current loss: {percent_change:.2f}%."
+                    cprint(f"\n🛑 MAXIMUM LOSS PERCENTAGE REACHED FOR TOKEN {token}", "white", "on_red")
+                    cprint(f"📉 Loss: {percent_change:.2f}% (Limit: {MAX_LOSS_PERCENT_PER_POSITION}%)", "red")
+                    
                 # Check if we should close the position based on loss thresholds
-                if limit_type == "USD" and usd_change <= -MAX_LOSS_USD:
-                    cprint(f"🛡️ Closing position for {token} due to loss: ${-usd_change:.2f}", "white", "on_red")
-                    continue  # Move to the next token
-                
+                if limit_type == "USD" and usd_change <= -MAX_LOSS_USD_PER_POSITION:
+                    type = "SELL"
+                    why = f"Sell position for {token} because the loss exceeds the maximum allowed limit of ${-MAX_LOSS_USD:.2f}. Current loss: ${usd_change:.2f}."
+                    cprint(f"\n🛑 MAXIMUM LOSS USD REACHED FOR TOKEN {token}", "white", "on_red")
+                    cprint(f"📉 Loss: ${usd_change:.2f} (Limit: ${MAX_LOSS_USD_PER_POSITION})", "red")
+
                 # Check if we should keep the position open based on gain thresholds
-                if limit_type == "percentage" and percent_change >= MAX_GAIN_PERCENT:
-                    cprint(f"🤖 Keeping position for {token} open: Gain is {percent_change:.2f}%", "white", "on_yellow")
-                    continue  # Move to the next token
-                
-                if limit_type == "USD" and usd_change >= MAX_GAIN_USD:
-                    cprint(f"🤖 Keeping position for {token} open: Gain is ${usd_change:.2f}", "white", "on_yellow")
-                    continue  # Move to the next token
+                if limit_type == "percentage" and percent_change >= MAX_GAIN_PERCENT_PER_POSITION:
+                    type = "SELL"
+                    why = f"Consider selling position for {token} because the gain has reached the maximum allowed limit of {MAX_GAIN_PERCENT_PER_POSITION}%. Current gain: +{percent_change:.2f}%."
+                    cprint(f"\n🎯 MAXIMUM GAIN PERCENTAGE REACHED FOR TOKEN {token}", "white", "on_red")
+                    cprint(f"📈 Gain: {percent_change:.2f}% (Limit: {MAX_GAIN_PERCENT_PER_POSITION}%)", "red")
+
+                if limit_type == "USD" and usd_change >= MAX_GAIN_USD_PER_POSITION:
+                    type = "SELL"
+                    why = f"Consider selling position for {token} because the gain has reached the maximum allowed limit of ${MAX_GAIN_USD_PER_POSITION:.2f}. Current gain: +${usd_change:.2f}."
+                    cprint(f"\n🎯 MAXIMUM GAIN USD REACHED FOR TOKEN {token}", "white", "on_red")
+                    cprint(f"📈 Gain: ${usd_change:.2f} (Limit: ${MAX_GAIN_USD_PER_POSITION})", "red")
+
+                # New conditions to keep the position if within the limits
+                if limit_type == "percentage" and -MAX_LOSS_PERCENT_PER_POSITION < percent_change < MAX_GAIN_PERCENT_PER_POSITION:
+                    type = "KEEP"
+                    why = f"Keep position for {token} because the current percentage change is within the allowed limits. Current change: {percent_change:.2f}%."
+                    cprint(f"\n✅ Position for {token} is within the allowed percentage limits.", "white", "on_yellow")
+
+                if limit_type == "USD" and -MAX_LOSS_USD_PER_POSITION < usd_change < MAX_GAIN_USD_PER_POSITION:
+                    type = "KEEP"
+                    why = f"Keep position for {token} because the current USD change is within the allowed limits. Current change: ${usd_change:.2f}."
+                    cprint(f"\n✅ Position for {token} is within the allowed USD limits.", "white", "on_yellow")
 
                 # Format data for AI analysis for each token
                 token_data = {
-                    'current_value_usd': current_value,  # Current value in USD
+                    'initial_position_value_usd': start_value,
+                    'current_position_value_usd': current_value,  # Current value in USD
                     'percent_change': percent_change,      # Change in percentage
                     'usd_change': usd_change,              # Change in USD
-                    'data': self.get_position_data(token)  # Additional relevant data
+                    'type': type,                          # Action type: "SELL" or "KEEP"
+                    'why_type': why,                            # Reason for the action
+                    'data': self.get_position_data(token),  # Additional relevant data
                 }
                 
                 position_data[token] = token_data
@@ -276,25 +297,20 @@ class RiskAgent(BaseAgent):
                 # Check if we should override (keep position open)
                 override_active = "OVERRIDE" in response.upper()
                 
+
                 # Print the AI's reasoning
-                cprint(f"\n🧠 Risk Agent Analysis for {token}:", "white", "on_blue")
+                cprint(f"\n🧠 Risk Agent Analysis for {token} {override_active}:", "white", "on_blue")
                 print(response)
                 
                 if override_active:
                     cprint(f"\n🤖 Risk Agent suggests keeping position for {token} open", "white", "on_yellow")
                 else:
                     cprint(f"\n🛡️ Risk Agent recommends closing position for {token}", "white", "on_red")
-                    self.close_position(token)  # Close the position if AI suggests it
-            
-            # Update the last check time
-            self.last_override_check = datetime.now()
-            self.override_active = any("OVERRIDE" in response.upper() for response in position_data.values())
-            
-            return self.override_active
+                   # self.close_position(token)  # Close the position if AI suggests it
             
         except Exception as e:
             cprint(f"❌ Error in override check: {str(e)}", "white", "on_red")
-            return False
+            return
 
     def check_pnl_limits(self):
         """Check if PnL limits have been hit"""
@@ -319,24 +335,24 @@ class RiskAgent(BaseAgent):
             if USE_PERCENTAGE:
                 # Calculate percentage change
                 if percent_change <= -MAX_LOSS_PERCENT:
-                    cprint("\n🛑 MAXIMUM LOSS PERCENTAGE REACHED", "white", "on_red")
+                    cprint("\n🛑 MAXIMUM LOSS PERCENTAGE REACHED FOR FULL PORTFOLIO", "white", "on_red")
                     cprint(f"📉 Loss: {percent_change:.2f}% (Limit: {MAX_LOSS_PERCENT}%)", "red")
                     return True
                     
                 if percent_change >= MAX_GAIN_PERCENT:
-                    cprint("\n🎯 MAXIMUM GAIN PERCENTAGE REACHED", "white", "on_green")
+                    cprint("\n🎯 MAXIMUM GAIN PERCENTAGE REACHED FOR FULL PORTFOLIO", "white", "on_green")
                     cprint(f"📈 Gain: {percent_change:.2f}% (Limit: {MAX_GAIN_PERCENT}%)", "green")
                     return True
                        
             else:
                 # Calculate USD change
                 if usd_change <= -MAX_LOSS_USD:
-                    cprint("\n🛑 MAXIMUM LOSS USD REACHED", "white", "on_red")
+                    cprint("\n🛑 MAXIMUM LOSS USD REACHED FOR FULL PORTFOLIO", "white", "on_red")
                     cprint(f"📉 Loss: ${abs(usd_change):.2f} (Limit: ${MAX_LOSS_USD:.2f})", "red")
                     return True
                     
                 if usd_change >= MAX_GAIN_USD:
-                    cprint("\n🎯 MAXIMUM GAIN USD REACHED", "white", "on_green")
+                    cprint("\n🎯 MAXIMUM GAIN USD REACHED FOR FULL PORTFOLIO", "white", "on_green")
                     cprint(f"📈 Gain: ${usd_change:.2f} (Limit: ${MAX_GAIN_USD:.2f})", "green")
                     return True
             
