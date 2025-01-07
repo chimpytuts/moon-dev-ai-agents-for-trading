@@ -5,36 +5,50 @@ Built with love by Moon Dev 🚀
 
 # 🛡️ Risk Override Prompt - The Secret Sauce!
 RISK_OVERRIDE_PROMPT = """
-You are Moon Dev's Risk Management AI 🛡️
+Analyze the following market data for this position and determine whether to OVERRIDE the risk limit or RESPECT the limit. Use all the provided information to justify your decision.
 
-We've hit a {limit_type} limit and need to decide whether to override it.
+**Position Details**:
+- Initial Position Value (USD): {start_value}
+- Current Position Value (USD): {current_value}
+- Percentage Change: {percent_change:.2f}%
+- USD Change: {usd_change:.2f}USD
+- Suggested Action Type: {type}
+- Reason for Suggested Action: {why}
+- Recent Market Data (15m): 
+{position_data_15m}
+- Recent Market Data (5m): 
+{position_data_5m}
 
-Analyze the provided market data for each position and decide if we should override the daily limit.
-Consider for each position:
-1. Recent price action and momentum (both 15m and 5m timeframes)
-2. Volume patterns and trends
-3. Market conditions and volatility
-4. Risk/reward ratio based on current position size
+**Evaluation Criteria**:
+1. **Recent Price Action and Momentum**:
+   - Analyze the recent price data from both the 15m and 5m timeframes.
+   - Use `percent_change` and `usd_change` to identify trends or reversals in momentum.
+   - Determine if the data shows strong continuation or reversal signals.
 
-For max loss overrides:
-- Be EXTREMELY conservative
-- Only override if strong reversal signals
-- Require 90%+ confidence
-- All positions must show reversal potential
+2. **Volume Trends**:
+   - Assess the volume data in the 15m and 5m timeframes (`data`) to confirm if it aligns with the price action.
+   - Consistent or increasing volume during price changes indicates stronger trends; divergence suggests caution.
 
-For max gain overrides:
-- Can be more lenient
-- Look for continued momentum
-- Require 60%+ confidence
-- Most positions should show upward momentum
+3. **Market Conditions**:
+   - Evaluate the broader market context (e.g., volatility or stability) based on the data.
+   - Identify if external market conditions may impact this position significantly.
 
-Current Positions and Data:
-{position_data}
+4. **Risk/Reward Analysis**:
+   - Compare the `initial_position_value_usd` with the `current_position_value_usd`.
+   - Assess whether the current value justifies maintaining the position or if the risks outweigh potential rewards.
 
-Respond with either:
-OVERRIDE: <detailed reason for each position>
-or
-RESPECT_LIMIT: <detailed reason for each position>
+**Decision Guidelines**:
+- For **loss scenarios**:
+  - OVERRIDE only if there is strong evidence of a reversal (e.g., price and volume alignment, market stabilization) with >70% confidence.
+  - If no strong reversal evidence, RESPECT_LIMIT and clearly explain the rationale.
+
+- For **gain scenarios**:
+  - OVERRIDE if the momentum and market data suggest continued upward potential with >60% confidence.
+  - If gains appear unsustainable, RESPECT_LIMIT and justify why the position should be closed.
+
+**Response Format**:
+1. OVERRIDE: <specific justification based on the data for this position>
+2. RESPECT_LIMIT: <specific justification based on the data for this position>
 """
 
 import anthropic
@@ -168,18 +182,26 @@ class RiskAgent(BaseAgent):
         except Exception as e:
             cprint(f"❌ Error logging balance: {str(e)}", "white", "on_red")
 
-    def get_position_data(self, token):
+    def get_position_data_5m(self, token):
         """Get recent market data for a token"""
-        try:
-            # Get 8h of 15m data
-            data_15m = n.get_data(token, 0.33, '15m')  # 8 hours = 0.33 days
-            
+        try:           
             # Get 2h of 5m data
             data_5m = n.get_data(token, 0.083, '5m')   # 2 hours = 0.083 days
             
             return {
-                '15m': data_15m.to_dict() if data_15m is not None else None,
                 '5m': data_5m.to_dict() if data_5m is not None else None
+            }
+        except Exception as e:
+            cprint(f"❌ Error getting data for {token}: {str(e)}", "white", "on_red")
+            return None
+
+    def get_position_data_15m(self, token):
+        """Get recent market data for a token"""
+        try:
+            # Get 8h of 15m data
+            data_15m = n.get_data(token, 0.33, '15m')  # 8 hours = 0.33 days            
+            return {
+                '15m': data_15m.to_dict() if data_15m is not None else None,
             }
         except Exception as e:
             cprint(f"❌ Error getting data for {token}: {str(e)}", "white", "on_red")
@@ -210,14 +232,16 @@ class RiskAgent(BaseAgent):
                 cprint("❌ No monitored positions found to analyze", "white", "on_red")
                 return
             # Collect data only for monitored tokens we have positions in
-            position_data = {}
+            position_data_5m = {}
+            position_data_15m = {}
+
             for _, row in positions.iterrows():
                 token = row['Mint Address']
                 current_value = row['USD Value']
                 purchase_price = n.get_trade_prices(address, token)  # Assuming you have this data
                 amount = row['Amount']
                 start_value = amount * purchase_price
-                type = ""
+                types = ""
                 why = ""
 
                 # Calculate loss and gain percentages
@@ -228,61 +252,66 @@ class RiskAgent(BaseAgent):
                 cprint(f"🔍 Starting analysis for token: {token}", "white", "on_blue")
 
                 if limit_type == "percentage" and percent_change <= -MAX_LOSS_PERCENT_PER_POSITION:
-                    type = "SELL"
-                    why = f"Sell position for {token} because the loss exceeds the maximum allowed limit of {MAX_LOSS_PERCENT}%. Current loss: {percent_change:.2f}%."
+                    types = "SELL"
+                    why = f"Sell position for {token} because the loss exceeds the maximum allowed limit of {MAX_LOSS_PERCENT_PER_POSITION}%. Current loss: {percent_change:.2f}%."
                     cprint(f"\n🛑 MAXIMUM LOSS PERCENTAGE REACHED FOR TOKEN {token}", "white", "on_red")
                     cprint(f"📉 Loss: {percent_change:.2f}% (Limit: {MAX_LOSS_PERCENT_PER_POSITION}%)", "red")
                     
                 # Check if we should close the position based on loss thresholds
                 if limit_type == "USD" and usd_change <= -MAX_LOSS_USD_PER_POSITION:
-                    type = "SELL"
-                    why = f"Sell position for {token} because the loss exceeds the maximum allowed limit of ${-MAX_LOSS_USD:.2f}. Current loss: ${usd_change:.2f}."
+                    types = "SELL"
+                    why = f"Sell position for {token} because the loss exceeds the maximum allowed limit of ${-MAX_LOSS_USD_PER_POSITION:.2f}. Current loss: ${usd_change:.2f}."
                     cprint(f"\n🛑 MAXIMUM LOSS USD REACHED FOR TOKEN {token}", "white", "on_red")
                     cprint(f"📉 Loss: ${usd_change:.2f} (Limit: ${MAX_LOSS_USD_PER_POSITION})", "red")
 
                 # Check if we should keep the position open based on gain thresholds
                 if limit_type == "percentage" and percent_change >= MAX_GAIN_PERCENT_PER_POSITION:
-                    type = "SELL"
+                    types = "SELL"
                     why = f"Consider selling position for {token} because the gain has reached the maximum allowed limit of {MAX_GAIN_PERCENT_PER_POSITION}%. Current gain: +{percent_change:.2f}%."
                     cprint(f"\n🎯 MAXIMUM GAIN PERCENTAGE REACHED FOR TOKEN {token}", "white", "on_red")
                     cprint(f"📈 Gain: {percent_change:.2f}% (Limit: {MAX_GAIN_PERCENT_PER_POSITION}%)", "red")
 
                 if limit_type == "USD" and usd_change >= MAX_GAIN_USD_PER_POSITION:
-                    type = "SELL"
+                    types = "SELL"
                     why = f"Consider selling position for {token} because the gain has reached the maximum allowed limit of ${MAX_GAIN_USD_PER_POSITION:.2f}. Current gain: +${usd_change:.2f}."
                     cprint(f"\n🎯 MAXIMUM GAIN USD REACHED FOR TOKEN {token}", "white", "on_red")
                     cprint(f"📈 Gain: ${usd_change:.2f} (Limit: ${MAX_GAIN_USD_PER_POSITION})", "red")
 
                 # New conditions to keep the position if within the limits
                 if limit_type == "percentage" and -MAX_LOSS_PERCENT_PER_POSITION < percent_change < MAX_GAIN_PERCENT_PER_POSITION:
-                    type = "KEEP"
-                    why = f"Keep position for {token} because the current percentage change is within the allowed limits. Current change: {percent_change:.2f}%."
+                    types = "KEEP"
+                    why = f"Keep position for {token} because the current percentage change is within the allowed limits. Current change: {percent_change:.2f}%. Limits are set to -{MAX_LOSS_PERCENT_PER_POSITION}% (max loss) and +{MAX_GAIN_PERCENT_PER_POSITION}% (max gain)."
                     cprint(f"\n✅ Position for {token} is within the allowed percentage limits.", "white", "on_yellow")
 
                 if limit_type == "USD" and -MAX_LOSS_USD_PER_POSITION < usd_change < MAX_GAIN_USD_PER_POSITION:
-                    type = "KEEP"
-                    why = f"Keep position for {token} because the current USD change is within the allowed limits. Current change: ${usd_change:.2f}."
+                    types = "KEEP"
+                    why = f"Keep position for {token} because the current USD change is within the allowed limits. Current change: ${usd_change:.2f}. Limits are set to -${MAX_LOSS_USD_PER_POSITION:.2f} (max loss) and +${MAX_GAIN_USD_PER_POSITION:.2f} (max gain)."
                     cprint(f"\n✅ Position for {token} is within the allowed USD limits.", "white", "on_yellow")
-
-                # Format data for AI analysis for each token
-                token_data = {
-                    'initial_position_value_usd': start_value,
-                    'current_position_value_usd': current_value,  # Current value in USD
-                    'percent_change': percent_change,      # Change in percentage
-                    'usd_change': usd_change,              # Change in USD
-                    'type': type,                          # Action type: "SELL" or "KEEP"
-                    'why_type': why,                            # Reason for the action
-                    'data': self.get_position_data(token),  # Additional relevant data
-                }
                 
-                position_data[token] = token_data
-
+                # Format data for AI analysis for each token
+                token_data_5m = {
+                    'data': self.get_position_data_5m(token)  # Get the raw data
+                }
+                token_data_15m = {
+                    'data': self.get_position_data_15m(token)  # Get the raw data
+                }
+                 
+                position_data_5m[token] = token_data_5m
+                position_data_15m[token] = token_data_15m
                 # Format prompt for AI analysis
                 prompt = RISK_OVERRIDE_PROMPT.format(
                     limit_type=limit_type,
-                    position_data=json.dumps({token: token_data}, indent=2)  # Send data for the specific token
+                    position_data_5m=json.dumps({token: token_data_5m}, indent=2),  # Send data for the specific token
+                    position_data_15m=json.dumps({token: token_data_15m}, indent=2),  # Send data for the specific token
+                    start_value = start_value,
+                    current_value = current_value,
+                    percent_change = percent_change,
+                    usd_change = usd_change,
+                    type=types,
+                    why=why
+
                 )
-                
+
                 cprint(f"🤖 AI Agent analyzing market data for {token}...", "white", "on_green")
                 message = self.client.messages.create(
                     model=config.AI_MODEL,
@@ -293,7 +322,6 @@ class RiskAgent(BaseAgent):
                 
                 # Get the response content and ensure it's a string
                 response = str(message.content) if message.content else ""
-                
                 # Check if we should override (keep position open)
                 override_active = "OVERRIDE" in response.upper()
                 

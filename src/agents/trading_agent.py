@@ -7,7 +7,7 @@ Handles all LLM-based trading decisions
 TRADING_PROMPT = """
 You are Moon Dev's AI Trading Assistant 🌙
 
-Analyze the provided market data and strategy signals (if available) to make a trading decision.
+Analyze the provided market data to make a trading decision.
 
 Market Data Criteria:
 1. Price action relative to MA20 and MA40
@@ -15,13 +15,10 @@ Market Data Criteria:
 3. Volume patterns
 4. Recent price movements
 
-{strategy_context}
-
 Respond in this exact format:
 1. First line must be one of: BUY, SELL, or NOTHING (in caps)
 2. Then explain your reasoning, including:
    - Technical analysis
-   - Strategy signals analysis (if available)
    - Risk factors
    - Market conditions
    - Confidence level (as a percentage, e.g. 75%)
@@ -405,8 +402,15 @@ Example format:
             cprint("📊 Collecting market data...", "white", "on_blue")
             market_data = collect_all_tokens()
             
-            # Analyze each token's data
+            # Get current portfolio tokens
+            current_portfolio_tokens = [token for token in MONITORED_TOKENS if n.get_token_balance_usd(token) > 0]
+
+            # Analyze each token's data that is monitored but not in the current portfolio
             for token, data in market_data.items():
+                if token in current_portfolio_tokens:
+                    print(f"⚠️ Skipping analysis for token already in portfolio: {token}")
+                    continue  # Skip tokens already in the portfolio
+                
                 cprint(f"\n🤖 AI Agent Analyzing Token: {token}", "white", "on_green")
                 
                 # Include strategy signals in analysis if available
@@ -429,7 +433,7 @@ Example format:
             
             # Then proceed with new allocations
             cprint("\n💰 Calculating optimal portfolio allocation...", "white", "on_blue")
-            allocation = self.allocate_portfolio()
+            # allocation = self.allocate_portfolio()
             
             if allocation:
                 cprint("\n💼 Moon Dev's Portfolio Allocation:", "white", "on_blue")

@@ -13,14 +13,14 @@ EXCLUDED_TOKENS = [USDC_ADDRESS, SOL_ADDRESS]
 # Token List for Trading 📋
 MONITORED_TOKENS = [
    'DS6qJNTGJUz26tjC6G75hGXGA6dvEyyiupS7okhLpump',    # 🌬️ FART
-    # 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',    # 💵 USDC
-    # 'EXNo6NwQMCJxvChkdEniw4NNzFK8uMsX7QA1MHfUpump',    # 🤖 SWARMZ
-    # 'v62Jv9pwMTREWV9f6TetZfMafV254vo99p7HSF25BPr',     # 🎮 GG Solana
+   # '8nQBuF666JEuSGR6FLitmXDCvH2QJrnvwvVrK6oepump',    # 💵 USDC
+   '8JR5Q3TrMmUkGiVndD3aoKEfVksvqFBDupRdEdSPskmJ',    # 🤖 SWARMZ
+   #'FmqiF8XZ3XQgGYq9jriqh3nTPJrNcGhWChbmJzG9LhYB',     # 🎮 GG Solana
     # 'KENJSUYLASHUMfHyy5o4Hp2FdNqZg1AsUPhfH2kYvEP',   # GRIFFAIN
    # '8x5VqbHA8D7NkD52uNuS5nnt3PwA3pLD34ymskeSo2Wn',    # 🧠 ZEREBRO
     # 'CnGb7hJsGdsFyQP2uXNWrUgT5K1tovBA3mNnUZcTpump',    # 😎 CHILL GUY
     # 'ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY',    # 🌙 MOODENG
-    # 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',    # 🐕 WIF
+    #'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',    # 🐕 WIF
     #'7uCHQdxAz2ojRgEpXRHas1nJAeTTo9b7JWNgpXXi9D9p' # CAT
 ]
 
@@ -81,7 +81,7 @@ buy_under = .0946
 sell_over = 1
 
 # Data collection settings 📈
-DAYSBACK_4_DATA = 1
+DAYSBACK_4_DATA = 4
 DATA_TIMEFRAME = '15m'  # 1m, 3m, 5m, 15m, 30m, 1H, 2H, 4H, 6H, 8H, 12H, 1D, 3D, 1W, 1M
 SAVE_OHLCV_DATA = False  # 🌙 Set to True to save data permanently, False will only use temp data during run
 
@@ -91,7 +91,7 @@ AI_MAX_TOKENS = 1024  # Max tokens for response
 AI_TEMPERATURE = 0.7  # Creativity vs precision (0-1)
 
 # Trading Strategy Agent Settings - MAY NOT BE USED YET 1/5/25
-ENABLE_STRATEGIES = True  # Set this to True to use strategies
+ENABLE_STRATEGIES = False  # Set this to True to use strategies
 STRATEGY_MIN_CONFIDENCE = 0.7  # Minimum confidence to act on strategy signals
 
 # Sleep time between main agent runs
