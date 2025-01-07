@@ -261,50 +261,6 @@ Example format:
             print(f"❌ Error executing allocations: {str(e)}")
             print("🔧 Moon Dev suggests checking the logs and trying again!")
 
-    def handle_exits(self):
-        """Check and exit positions based on SELL or NOTHING recommendations"""
-        cprint("\n🔄 Checking for positions to exit...", "white", "on_blue")
-        
-        for _, row in self.recommendations_df.iterrows():
-            token = row['token']
-            
-            # Skip excluded tokens (USDC and SOL)
-            if token in EXCLUDED_TOKENS:
-                continue
-                
-            action = row['action']
-            
-            # Check if we have a position
-            current_position = n.get_token_balance_usd(token)
-            
-        if current_position > 0:
-            """
-            if action == "SELL":
-                cprint(f"\n🚫 AI Agent recommends {action} for {token}", "white", "on_yellow")
-                cprint(f"💰 Current position: ${current_position:.2f}", "white", "on_blue")
-                try:
-                    cprint(f"📉 Closing position with chunk_kill...", "white", "on_cyan")
-                    n.chunk_kill(token, max_usd_order_size, slippage)
-                    cprint(f"✅ Successfully closed position", "white", "on-green")
-                except Exception as e:
-                    cprint(f"❌ Error closing position: {str(e)}", "white", "on_red")
-                
-            elif action == "NOTHING":
-              
-              # Log and keep the position open
-              cprint(f"💡 AI Agent recommends NOTHING for {token}. Current position remains open: ${current_position:.2f}", "white", "on_blue")
-              market_data = collect_all_tokens()  # Ensure you have this function properly defined
-              # Optional: Monitor the position or implement health checks
-              price = n.token_price(token)  # Assuming we have a function to fetch the current price.
-              indicators = self.analyze_market_data(token, market_data)
-    
-              # Decision to log indicators or take action if certain conditions are met
-              if price < indicators['MA20'] and indicators['RSI'] < 30:
-                cprint(f"⚠️ Attention: Current price is below MA20 and RSI indicates oversold for {token}. Consider reviewing this position.", "white", "on_red")
-            else:
-            """
-            cprint(f"✨ Keeping position for {token} (${current_position:.2f}) - AI recommends {action}", "white", "on_blue")
-
     def parse_allocation_response(self, response):
         """Parse the AI's allocation response and handle both string and TextBlock formats"""
         try:
@@ -427,10 +383,7 @@ Example format:
             cprint("\n📊 Moon Dev's Trading Recommendations:", "white", "on_blue")
             summary_df = self.recommendations_df[['token', 'action', 'confidence']].copy()
             print(summary_df.to_string(index=False))
-            
-            # Handle exits first
-            self.handle_exits()
-            
+                        
             # Then proceed with new allocations
             cprint("\n💰 Calculating optimal portfolio allocation...", "white", "on_blue")
             # allocation = self.allocate_portfolio()

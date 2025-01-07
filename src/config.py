@@ -24,6 +24,13 @@ MONITORED_TOKENS = [
     #'7uCHQdxAz2ojRgEpXRHas1nJAeTTo9b7JWNgpXXi9D9p' # CAT
 ]
 
+TOKENS_MARKET_ANALYSIS = [
+    {'address': '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh', 'name': 'BTC'},
+    {'address': '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs', 'name': 'ETH'},
+    {'address': 'So11111111111111111111111111111111111111112', 'name': 'SOL'},
+]
+
+
 # Moon Dev's Token Trading List 🚀
 # Each token is carefully selected by Moon Dev for maximum moon potential! 🌙
 tokens_to_trade = MONITORED_TOKENS  # Using the same list for trading

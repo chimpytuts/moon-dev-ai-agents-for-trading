@@ -340,10 +340,10 @@ def get_time_range(days_back):
 def get_data(address, days_back_4_data, timeframe):
     time_from, time_to = get_time_range(days_back_4_data)
     # Check temp data first
-    temp_file = f"temp_data/{address}_latest.csv"
-    if os.path.exists(temp_file):
-        print(f"📂 Moon Dev found cached data for {address[:4]}")
-        return pd.read_csv(temp_file)
+    # temp_file = f"temp_data/{address}_latest.csv"
+    # if os.path.exists(temp_file):
+    #    print(f"📂 Moon Dev found cached data for {address[:4]}")
+    #    return pd.read_csv(temp_file)
 
     url = f"https://public-api.birdeye.so/defi/ohlcv?address={address}&type={timeframe}&time_from={time_from}&time_to={time_to}"
 
@@ -385,8 +385,8 @@ def get_data(address, days_back_4_data, timeframe):
         print(f"📊 MoonDev's Data Analysis Ready! Processing {len(df)} candles... 🎯")
 
         # Always save to temp for current run
-        df.to_csv(temp_file)
-        print(f"🔄 Moon Dev cached data for {address[:4]}")
+        # df.to_csv(temp_file)
+        # print(f"🔄 Moon Dev cached data for {address[:4]}")
 
         # Calculate indicators
         df['MA20'] = ta.sma(df['Close'], length=20)
