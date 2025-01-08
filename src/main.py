@@ -16,24 +16,23 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 # Import agents
-from src.agents.chimpytuts.trading_agent import TradingAgent
-from src.agents.chimpytuts.risk_agent import RiskAgent
+from src.agents.trading_agent import TradingAgent
+from src.agents.risk_agent import RiskAgent
 from src.agents.strategy_agent import StrategyAgent
 from src.agents.copybot_agent import CopyBotAgent
-from src.agents.sentiment_agent import SentimentAgent
 
 # Load environment variables
 load_dotenv()
 
 # Agent Configuration
 ACTIVE_AGENTS = {
-    'risk': True,      # Risk management agent
+    'risk': False,      # Risk management agent
     'trading': False,   # LLM trading agent
     'strategy': False,  # Strategy-based trading agent
-    'copybot': False,   # CopyBot agent
-    'sentiment': True, # Run sentiment_agent.py directly instead
+    'copybot': True,    # CopyBot agent
     # whale_agent is run from whale_agent.py
     # Add more agents here as we build them:
+    # 'sentiment': False,  # Future sentiment analysis agent
     # 'portfolio': False,  # Future portfolio optimization agent
 }
 
@@ -45,7 +44,6 @@ def run_agents():
         risk_agent = RiskAgent() if ACTIVE_AGENTS['risk'] else None
         strategy_agent = StrategyAgent() if ACTIVE_AGENTS['strategy'] else None
         copybot_agent = CopyBotAgent() if ACTIVE_AGENTS['copybot'] else None
-        sentiment_agent = SentimentAgent() if ACTIVE_AGENTS['sentiment'] else None
 
         while True:
             try:
@@ -54,15 +52,38 @@ def run_agents():
                     cprint("\n🛡️ Running Risk Management...", "cyan")
                     risk_agent.run()
 
-            # Sleep until next cycle
-            next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
-            cprint(f"\n😴 Sleeping until {next_run.strftime('%H:%M:%S')}", "cyan")
-            time.sleep(60 * SLEEP_BETWEEN_RUNS_MINUTES)
+                # Run Trading Analysis
+                if trading_agent:
+                    cprint("\n🤖 Running Trading Analysis...", "cyan")
+                    trading_agent.run()
+
+                # Run Strategy Analysis
+                if strategy_agent:
+                    cprint("\n📊 Running Strategy Analysis...", "cyan")
+                    for token in MONITORED_TOKENS:
+                        if token not in EXCLUDED_TOKENS:  # Skip USDC and other excluded tokens
+                            cprint(f"\n🔍 Analyzing {token}...", "cyan")
+                            strategy_agent.get_signals(token)
+
+                # Run CopyBot Analysis
+                if copybot_agent:
+                    cprint("\n🤖 Running CopyBot Portfolio Analysis...", "cyan")
+                    copybot_agent.run_analysis_cycle()
+
+                # Sleep until next cycle
+                next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
+                cprint(f"\n😴 Sleeping until {next_run.strftime('%H:%M:%S')}", "cyan")
+                time.sleep(60 * SLEEP_BETWEEN_RUNS_MINUTES)
+
+            except Exception as e:
+                cprint(f"\n❌ Error running agents: {str(e)}", "red")
+                cprint("🔄 Continuing to next cycle...", "yellow")
+                time.sleep(60)  # Sleep for 1 minute on error before retrying
 
     except KeyboardInterrupt:
         cprint("\n👋 Gracefully shutting down...", "yellow")
     except Exception as e:
-        cprint(f"\n❌ Error in main loop: {str(e)}", "red")
+        cprint(f"\n❌ Fatal error in main loop: {str(e)}", "red")
         raise
 
 if __name__ == "__main__":
@@ -72,5 +93,5 @@ if __name__ == "__main__":
         status = "✅ ON" if active else "❌ OFF"
         cprint(f"  • {agent.title()}: {status}", "white", "on_blue")
     print("\n")
-    
+
     run_agents()
