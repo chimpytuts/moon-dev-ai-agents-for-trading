@@ -1218,3 +1218,332 @@ def get_trade_prices(trader_address, token_address, offset=0, limit=100, before_
     except Exception as e:
         cprint(f"❌ Error fetching trades for {trader_address}: {str(e)}", "red")
         return None
+    
+def get_trending_tokens():
+    """Fetch trending tokens from Birdeye API"""
+    try:
+        endpoint = f"{BASE_URL}/token_trending"
+        response = requests.get(endpoint, headers={"X-API-KEY": BIRDEYE_API_KEY})
+        response.raise_for_status()
+        
+        data = response.json()
+        if 'data' in data and 'items' in data['data']:
+            trending_tokens = [item['address'] for item in data['data']['items']]
+            cprint(f"✨ Found {len(trending_tokens)} trending tokens!", "green")
+            return trending_tokens
+        return []
+        
+    except Exception as e:
+        cprint(f"❌ Error fetching trending tokens: {str(e)}", "red")
+        return []
+
+def get_new_listings():
+    """Fetch newly listed tokens from Birdeye API"""
+    try:
+        endpoint = f"{BASE_URL}/v2/tokens/new_listing"
+        response = requests.get(endpoint, headers={"X-API-KEY": BIRDEYE_API_KEY})
+        response.raise_for_status()
+        
+        data = response.json()
+        if 'data' in data and 'items' in data['data']:
+            new_tokens = [item['address'] for item in data['data']['items']]
+            cprint(f"✨ Found {len(new_tokens)} new token listings!", "green")
+            return new_tokens
+        return []
+        
+    except Exception as e:
+        cprint(f"❌ Error fetching new listings: {str(e)}", "red")
+        return []
+
+def discover_tokens():
+    """Run token discovery and return unique addresses"""
+    try:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cprint(f"\n⏰ Token Discovery Starting at {current_time}", "white", "on_green")
+        
+        # Get trending tokens
+        cprint("\n🔥 Fetching trending tokens...", "cyan")
+        trending = get_trending_tokens()
+        
+        # Get new listings
+        cprint("\n🆕 Fetching new token listings...", "cyan")
+        new_listings = get_new_listings()
+        
+        # Combine unique addresses
+        all_tokens = list(set(trending + new_listings))
+        
+        # Print summary
+        cprint("\n📊 Discovery Summary:", "green")
+        cprint(f"Found {len(all_tokens)} unique token addresses:", "green")
+        for addr in all_tokens:
+            cprint(f"  • {addr}", "green")
+        
+        return all_tokens
+        
+    except Exception as e:
+        cprint(f"\n❌ Error in discovery: {str(e)}", "red")
+        return []
+    
+def check_rugpull_risk_rpc(token_address, test_amount=1000000):  # 1 USDC by default
+    try:
+        cprint(f"\n🔍 Analyzing rugpull risk for token {token_address[:8]}...", "white", "on_blue")
+        
+        # First, let's check if this is a Token2022 token
+        program_check_payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getAccountInfo",
+            "params": [
+                token_address,
+                {
+                    "encoding": "jsonParsed",
+                    "commitment": "confirmed"
+                }
+            ]
+        }
+
+        program_response = requests.post(os.getenv("RPC_ENDPOINT"), json=program_check_payload)
+        if not program_response.status_code == 200:
+            cprint("❌ Failed to get token information", "red")
+            return None
+
+        program_data = program_response.json()
+        if not program_data.get('result'):
+            cprint("❌ No token data found", "red")
+            return None
+
+        # Get the program ID (owner)
+        program_id = program_data['result']['value']['owner']
+
+        TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        
+        is_token_2022 = program_id == TOKEN_2022
+        is_token_program = program_id == TOKEN_PROGRAM
+        
+
+        # Display program type nicely
+        if is_token_2022:
+            cprint("Token Program: Token2022", "cyan")
+        elif is_token_program:
+            cprint("Token Program: Token Program", "cyan")
+        else:
+            cprint("Token Program: Unknown", "red")
+
+      
+        if not (is_token_2022 or is_token_program):
+            cprint("❌ Unknown token program", "red")
+            return None
+        
+        # Animated loading
+        cprint("\n⏳ Analyzing token...", "white", "on_blue")
+        
+        risk_factors = {
+            "transfer_fee": 0,
+            "max_transfer_fee": "0",
+            "freeze_authority": False,
+            "permanent_delegate": False,
+            "mint_authority": False,
+            "update_authority": False,
+            "can_buy": False,
+            "can_sell": False,
+            "is_honeypot": False,
+            "risk_level": 0,
+            "warnings": [],
+            "is_token2022": is_token_2022
+        }
+
+        # Move parsed_data extraction here (only once)
+        parsed_data = program_data['result']['value']['data']['parsed']['info']
+
+        # Check authorities (only once)
+        if parsed_data.get('mintAuthority'):
+            risk_factors["mint_authority"] = True
+            risk_factors["warnings"].append("⚠️ Token has mint authority")
+            risk_factors["risk_level"] += 4  # Increased from 2
+        
+        if parsed_data.get('freezeAuthority'):
+            risk_factors["freeze_authority"] = True
+            risk_factors["warnings"].append("⚠️ Token has freeze authority")
+            risk_factors["risk_level"] += 4  # Increased from 2
+
+        # Update authority check
+        update_authority = parsed_data.get('metaplexUpdateAuthority')
+        if update_authority:
+            PUMP_FUN_ADDRESS = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM"
+            
+            risk_factors["update_authority"] = True
+            if update_authority != PUMP_FUN_ADDRESS:
+                risk_factors["warnings"].append("⚠️ Token has custom update authority")
+                risk_factors["risk_level"] += 4  # Increased from 2
+        else:
+            risk_factors["update_authority"] = False
+
+        # Token2022 specific checks
+        if is_token_2022:
+            
+            try:
+                # Check extensions for transfer fee
+                for extension in parsed_data.get('extensions', []):
+                    if extension.get('extension') == 'transferFeeConfig':
+                        fee_state = extension.get('state', {})
+                        newer_fee = fee_state.get('newerTransferFee', {})
+                        
+                        # Get transfer fee (400 basis points = 4%)
+                        transfer_fee_bps = newer_fee.get('transferFeeBasisPoints', 0)
+                        risk_factors["transfer_fee"] = transfer_fee_bps / 100
+                        
+                        # Get max fee (divide by 1e2 since it's in base units)
+                        max_fee = newer_fee.get('maximumFee', 0)
+                        risk_factors["max_transfer_fee"] = str(max_fee / (10 ** 2))
+                        
+                        # Get epoch
+                        epoch = newer_fee.get('epoch', 0)
+                     
+                        if risk_factors["transfer_fee"] > 0:
+                            risk_factors["risk_level"] += 2  # Base points for having a fee
+                            if risk_factors["transfer_fee"] > 3:
+                                risk_factors["risk_level"] += 4  # Additional points for high fee
+                        break
+                    
+            except Exception as e:
+                cprint(f"❌ Error checking Token2022 features: {str(e)}", "red")
+                cprint(f"Error details: {str(e.__class__.__name__)}", "red")
+
+        # 2. Simulate buy using Jupiter (to detect honeypots)
+        USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        try:
+            quote = requests.get(
+                f'https://quote-api.jup.ag/v6/quote?inputMint={USDC}&outputMint={token_address}&amount={test_amount}&slippageBps=1000'
+            ).json()
+            
+            if 'error' not in quote:
+                risk_factors["can_buy"] = True
+            else:
+                risk_factors["warnings"].append("❌ Cannot buy token")
+                risk_factors["risk_level"] += 3
+                
+        except Exception as e:
+            risk_factors["warnings"].append("❌ Buy simulation failed")
+            risk_factors["risk_level"] += 2
+
+        # 3. Simulate sell
+        try:
+            output_amount = int(float(quote.get('outAmount', test_amount)))
+            sell_quote = requests.get(
+                f'https://quote-api.jup.ag/v6/quote?inputMint={token_address}&outputMint={USDC}&amount={output_amount}&slippageBps=1000'
+            ).json()
+            
+            if 'error' not in sell_quote:
+                risk_factors["can_sell"] = True
+            else:
+                risk_factors["warnings"].append("❌ Cannot sell token (potential honeypot)")
+                risk_factors["risk_level"] += 3
+                risk_factors["is_honeypot"] = True
+                
+        except Exception as e:
+            risk_factors["warnings"].append("❌ Sell simulation failed")
+            risk_factors["risk_level"] += 2
+
+        # 4. Check supply concentration
+        try:
+            payload_largest = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTokenLargestAccounts",
+                "params": [token_address]
+            }
+            
+            response_largest = requests.post(os.getenv("RPC_ENDPOINT"), json=payload_largest)
+            if response_largest.status_code == 200:
+                largest_data = response_largest.json()
+                if 'result' in largest_data:
+                    accounts = largest_data['result']['value']
+                    
+                    total_supply = sum(float(acc['amount']) for acc in accounts)
+                    top_holder_amount = float(accounts[0]['amount']) if accounts else 0
+                    
+                    concentration = (top_holder_amount / total_supply) if total_supply > 0 else 0
+                    if concentration > 0.5:
+                        risk_factors["warnings"].append(f"🚨 High supply concentration: {concentration*100:.1f}% held by single account")
+                        risk_factors["risk_level"] += 3
+
+        except Exception as e:
+            cprint(f"❌ Error checking supply concentration: {str(e)}", "red")
+
+        # Show loading message while gathering data
+        cprint("\n⏳ Gathering token information...", "white", "on_blue")
+        
+        # Final risk assessment
+        risk_factors["risk_level"] = min(risk_factors["risk_level"], 20)  # Max is now 20
+        
+        # Print summary
+        cprint("\n📊 Token Analysis:", "white", "on_blue")
+        cprint(f"Risk Level: {risk_factors['risk_level']}/20", 
+               "green" if risk_factors['risk_level'] < 7 else "yellow" if risk_factors['risk_level'] < 14 else "red")
+        
+        # Program Type
+        if is_token_2022:
+            cprint("Token Type: Token2022 Program 🔷", "cyan")
+        else:
+            cprint("Token Type: Standard Token Program", "cyan")
+        
+        # Transfer Fee
+        if risk_factors['transfer_fee'] > 0:
+            cprint(f"Transfer Fee: {risk_factors['transfer_fee']}% ❌", "red")
+            if 'epoch' in locals():
+                cprint(f"Fee Activation Epoch: {epoch} ⏰", "yellow")
+        else:
+            cprint("Transfer Fee: 0% ✅", "green")
+        
+        # Max Transfer Fee
+        if float(risk_factors['max_transfer_fee']) > 0:
+            cprint(f"Max Transfer Fee: {risk_factors['max_transfer_fee']} ❌", "red")
+        else:
+            cprint("Max Transfer Fee: 0 ✅", "green")
+        
+        # Freeze Authority
+        cprint(f"Freeze Authority: {risk_factors['freeze_authority']} {'❌' if risk_factors['freeze_authority'] else '✅'}", 
+               "red" if risk_factors['freeze_authority'] else "green")
+        
+        # Permanent Delegate
+        cprint(f"Permanent Delegate: {risk_factors['permanent_delegate']} {'❌' if risk_factors['permanent_delegate'] else '✅'}", 
+               "red" if risk_factors['permanent_delegate'] else "green")
+        
+        # Mint Authority
+        cprint(f"Mint Authority: {risk_factors['mint_authority']} {'❌' if risk_factors['mint_authority'] else '✅'}", 
+               "red" if risk_factors['mint_authority'] else "green")
+        
+        # Update Authority
+        if risk_factors['update_authority']:
+            if update_authority == PUMP_FUN_ADDRESS:
+                cprint("Update Authority: pump.fun ✅", "green")
+            else:
+                cprint(f"Update Authority: {update_authority} ❌", "red")
+        else:
+            cprint("Update Authority: None ✅", "green")
+        
+        # Trading Status
+        cprint(f"Can Buy: {risk_factors['can_buy']} {'✅' if risk_factors['can_buy'] else '❌'}", 
+               "green" if risk_factors['can_buy'] else "red")
+        cprint(f"Can Sell: {risk_factors['can_sell']} {'✅' if risk_factors['can_sell'] else '❌'}", 
+               "green" if risk_factors['can_sell'] else "red")
+        
+        # Honeypot Status
+        if risk_factors["is_honeypot"]:
+            cprint("Honeypot Check: Potential Honeypot Detected! ❌", "red")
+        else:
+            cprint("Honeypot Check: Not Detected ✅", "green")
+        
+        # Supply Concentration (if available)
+        if 'concentration' in locals():
+            if concentration > 0.5:
+                cprint(f"Supply Concentration: {concentration*100:.1f}% held by single account ❌", "red")
+            else:
+                cprint(f"Supply Concentration: {concentration*100:.1f}% ✅", "green")
+
+        return risk_factors
+
+    except Exception as e:
+        cprint(f"\n❌ Error in token analysis: {str(e)}", "red")
+        return None
