@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 import shutil
 import atexit
 import pytz
+from solders.pubkey import Pubkey
 
 # Load environment variables
 load_dotenv()
@@ -1284,7 +1285,7 @@ def discover_tokens():
         cprint(f"\n❌ Error in discovery: {str(e)}", "red")
         return []
     
-def check_rugpull_risk_rpc(token_address, test_amount=1000000):  # 1 USDC by default
+def check_rugpull_risk_rpc(token_address, test_amount=1000000):
     try:
         cprint(f"\n🔍 Analyzing rugpull risk for token {token_address[:8]}...", "white", "on_blue")
         
@@ -1445,32 +1446,85 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):  # 1 USDC by def
             risk_factors["warnings"].append("❌ Sell simulation failed")
             risk_factors["risk_level"] += 2
 
-        # 4. Check supply concentration
-        try:
-            payload_largest = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "getTokenLargestAccounts",
-                "params": [token_address]
+        # Get token security data from Birdeye
+        security_url = f"https://public-api.birdeye.so/defi/token_security?address={token_address}"
+        security_response = requests.get(
+            security_url,
+            headers={
+                "X-API-KEY": BIRDEYE_API_KEY,
+                "accept": "application/json",
+                "x-chain": "solana"
+            }
+        )
+        
+        if security_response.status_code == 200:
+            security_data = security_response.json()
+            if 'data' in security_data:
+                data = security_data['data']
+                
+                # Get creation time from security data
+                creation_time = data.get('creationTime') or data.get('mintTime')  # Try both fields
+                if creation_time:
+                    try:
+                        creation_date = datetime.fromtimestamp(creation_time)
+                        token_age = datetime.now() - creation_date
+                        
+                        risk_factors['creation_date'] = creation_date.strftime('%Y-%m-%d %H:%M:%S')
+                        risk_factors['token_age_days'] = token_age.days
+                        
+                        # Add to risk assessment
+                        if token_age.days < 1:
+                            risk_factors['warnings'].append("⚠️ Token created less than 24 hours ago")
+                            risk_factors['risk_level'] += 3
+                        elif token_age.days < 7:
+                            risk_factors['warnings'].append("⚠️ Token less than 7 days old")
+                            risk_factors['risk_level'] += 1
+                    except Exception as e:
+                        cprint(f"Error processing creation time: {str(e)}", "red")
+                else:
+                    cprint("\nCreation Date: Unable to determine", "red")
+
+                # Get holder concentration
+                top10_holder_percent = data.get('top10HolderPercent', 0)
+                if top10_holder_percent > 0.5:  # If top 10 holders have more than 50%
+                    risk_factors["warnings"].append(f"🚨 High supply concentration: {top10_holder_percent*100:.1f}% held by top 10 holders")
+                    risk_factors["risk_level"] += 3
+                
+                # Get user concentration
+                top10_user_percent = data.get('top10UserPercent', 0)
+                if top10_user_percent > 0.5:  # If top 10 users have more than 50%
+                    risk_factors["warnings"].append(f"🚨 High user concentration: {top10_user_percent*100:.1f}% held by top 10 users")
+                    risk_factors["risk_level"] += 2
+
+
+            market_url = f"https://public-api.birdeye.so/defi/v3/token/market-data?address={token_address}"
+            headers = {
+                "X-API-KEY": BIRDEYE_API_KEY,
+                "accept": "application/json",
+                "x-chain": "solana"
             }
             
-            response_largest = requests.post(os.getenv("RPC_ENDPOINT"), json=payload_largest)
-            if response_largest.status_code == 200:
-                largest_data = response_largest.json()
-                if 'result' in largest_data:
-                    accounts = largest_data['result']['value']
-                    
-                    total_supply = sum(float(acc['amount']) for acc in accounts)
-                    top_holder_amount = float(accounts[0]['amount']) if accounts else 0
-                    
-                    concentration = (top_holder_amount / total_supply) if total_supply > 0 else 0
-                    if concentration > 0.5:
-                        risk_factors["warnings"].append(f"🚨 High supply concentration: {concentration*100:.1f}% held by single account")
-                        risk_factors["risk_level"] += 3
+            market_response = requests.get(market_url, headers=headers)
+         
+            if market_response.status_code == 200:
+                market_data = market_response.json()
+               
+                data = market_data.get('data', {})
+                # Get all market metrics
+                liquidity = data.get('liquidity', 0)
+                price = data.get('price', 0)
+                circulating_supply = data.get('circulating_supply', 0)
+                market_cap = data.get('marketcap', 0)
+                circulating_market_cap = data.get('circulating_marketcap', 0)
 
-        except Exception as e:
-            cprint(f"❌ Error checking supply concentration: {str(e)}", "red")
+                # Store in risk factors
+                risk_factors['liquidity_usd'] = liquidity
+                risk_factors['price_usd'] = price
+                risk_factors['circulating_supply'] = circulating_supply
+                risk_factors['market_cap_usd'] = market_cap
+                risk_factors['circulating_market_cap'] = circulating_market_cap
 
+            
         # Show loading message while gathering data
         cprint("\n⏳ Gathering token information...", "white", "on_blue")
         
@@ -1535,12 +1589,77 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):  # 1 USDC by def
         else:
             cprint("Honeypot Check: Not Detected ✅", "green")
         
-        # Supply Concentration (if available)
-        if 'concentration' in locals():
-            if concentration > 0.5:
-                cprint(f"Supply Concentration: {concentration*100:.1f}% held by single account ❌", "red")
+        # Liquidity
+        if 'liquidity_usd' in risk_factors:
+            liquidity = risk_factors['liquidity_usd']
+            liquidity_color = "red" if liquidity < 1000 else "yellow" if liquidity < 10000 else "green"
+            cprint(f"Liquidity: ${liquidity:,.2f} {'❌' if liquidity < 1000 else '⚠️' if liquidity < 10000 else '✅'}", 
+                   liquidity_color)
+        
+          # Market Metrics
+        cprint(f"Price: ${risk_factors['price_usd']:.8f}", "cyan")
+        cprint(f"Market Cap: ${risk_factors['market_cap_usd']:,.2f}", "cyan")
+        cprint(f"Circulating Supply: {risk_factors['circulating_supply']:,.0f}", "cyan")
+        cprint(f"Circulating Market Cap: ${risk_factors['circulating_market_cap']:,.2f}", "cyan")
+        # Creation Date and Age
+        if 'creation_date' in risk_factors:
+            age_color = "red" if risk_factors['token_age_days'] < 1 else "yellow" if risk_factors['token_age_days'] < 7 else "green"
+            cprint(f"\nCreation Date: {risk_factors['creation_date']}", age_color)
+            cprint(f"Token Age: {risk_factors['token_age_days']} days {'❌' if risk_factors['token_age_days'] < 1 else '⚠️' if risk_factors['token_age_days'] < 7 else '✅'}", 
+                   age_color)
+        else:
+            cprint("\nCreation Date: Unable to determine", "red")
+
+        # Check liquidity lock status using Helius DAS
+        try:
+            das_payload = {
+                "jsonrpc": "2.0",
+                "id": "my-id",
+                "method": "searchAssets",
+                "params": {
+                    "ownerAddress": token_address,
+                    "page": 1,
+                    "limit": 1000,
+                    "displayOptions": {
+                        "showUnverifiedCollections": True
+                    }
+                }
+            }
+            
+            cprint("\nChecking liquidity lock status...", "yellow")
+            das_response = requests.post(
+                os.getenv("RPC_ENDPOINT"), 
+                json=das_payload,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            cprint(f"Debug: DAS Response Status: {das_response.status_code}", "yellow")
+            if das_response.status_code == 200:
+                das_data = das_response.json()
+                cprint(f"Debug: DAS Response: {str(das_data)}", "yellow")
+                
+                if 'result' in das_data and das_data['result'].get('items'):
+                    # Filter for LP tokens in the response
+                    lp_tokens = [item for item in das_data['result']['items'] 
+                               if 'LP' in str(item.get('content', {}).get('metadata', {}).get('symbol', ''))]
+                    
+                    if lp_tokens:
+                        cprint("Liquidity Lock: Found LP tokens ✅", "green")
+                        risk_factors['liquidity_locked'] = True
+                    else:
+                        cprint("Liquidity Lock: No LP tokens found ❌", "red")
+                        risk_factors['liquidity_locked'] = False
+                        risk_factors["risk_level"] += 2
+                else:
+                    cprint("Liquidity Lock: No LP data found ❌", "red")
+                    risk_factors['liquidity_locked'] = False
+                    risk_factors["risk_level"] += 2
             else:
-                cprint(f"Supply Concentration: {concentration*100:.1f}% ✅", "green")
+                cprint(f"Unable to check liquidity lock status. Error: {das_response.text}", "red")
+                
+        except Exception as e:
+            cprint(f"Error checking liquidity lock: {str(e)}", "red")
+            cprint(f"Error type: {type(e)}", "red")
 
         return risk_factors
 
