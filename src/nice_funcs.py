@@ -60,11 +60,14 @@ def find_urls(string):
 # UPDATED TO RMEOVE THE OTHER ONE so now we can just use this filter instead of filtering twice
 def token_overview(address):
     """
-    Fetch token overview for a given address and return structured information, including specific links,
-    and assess if any price change suggests a rug pull.
+    Fetch comprehensive token overview for AI analysis, including:
+    - Trading metrics (volume, buys/sells, price changes)
+    - Social metrics (views, watchlists)
+    - Liquidity metrics
+    - Market metrics (mcap, fdv)
+    - Holder metrics
     """
 
-    print(f'Getting the token overview for {address}')
     overview_url = f"{BASE_URL}/token_overview?address={address}"
     headers = {"X-API-KEY": BIRDEYE_API_KEY}
 
@@ -74,70 +77,20 @@ def token_overview(address):
     if response.status_code == 200:
         overview_data = response.json().get('data', {})
 
-        # Retrieve buy1h, sell1h, and calculate trade1h
-        buy1h = overview_data.get('buy1h', 0)
-        sell1h = overview_data.get('sell1h', 0)
-        trade1h = buy1h + sell1h
-
-        # Add the calculated values to the result
-        result['buy1h'] = buy1h
-        result['sell1h'] = sell1h
-        result['trade1h'] = trade1h
-
-        # Calculate buy and sell percentages
-        total_trades = trade1h  # Assuming total_trades is the sum of buy and sell
-        buy_percentage = (buy1h / total_trades * 100) if total_trades else 0
-        sell_percentage = (sell1h / total_trades * 100) if total_trades else 0
-        result['buy_percentage'] = buy_percentage
-        result['sell_percentage'] = sell_percentage
-
-        # Check if trade1h is bigger than MIN_TRADES_LAST_HOUR
-        result['minimum_trades_met'] = True if trade1h >= MIN_TRADES_LAST_HOUR else False
-
-        # Extract price changes over different timeframes
-        price_changes = {k: v for k, v in overview_data.items() if 'priceChange' in k}
-        result['priceChangesXhrs'] = price_changes
-
-        # Check for rug pull indicator
-        rug_pull = any(value < -80 for key, value in price_changes.items() if value is not None)
-        result['rug_pull'] = rug_pull
-        if rug_pull:
-            print("Warning: Price change percentage below -80%, potential rug pull")
-
-        # Extract other metrics
-        unique_wallet2hr = overview_data.get('uniqueWallet24h', 0)
-        v24USD = overview_data.get('v24hUSD', 0)
-        watch = overview_data.get('watch', 0)
-        view24h = overview_data.get('view24h', 0)
-        liquidity = overview_data.get('liquidity', 0)
-
-        # Add the retrieved data to result
+        # Trading Metrics
         result.update({
-            'uniqueWallet2hr': unique_wallet2hr,
-            'v24USD': v24USD,
-            'watch': watch,
-            'view24h': view24h,
-            'liquidity': liquidity,
+            'price_usd': overview_data.get('price', 0),
+            'price_change_30m': overview_data.get('priceChange30mPercent', 0),
+            'buy30m': overview_data.get('buy30m', 0),
+            'sell30m': overview_data.get('sell30m', 0),
+            'vBuy30mUSD': overview_data.get('vBuy30mUSD', 0),
+            'vSell30mUSD': overview_data.get('vSell30mUSD', 0),
+            'uniqueWallet30m': overview_data.get('uniqueWallet30m', 0),
+            'mc': overview_data.get('realMc', 0),
+            'total_supply': overview_data.get('supply', 0),
+            'circulating_supply': overview_data.get('circulatingSupply', 0),
         })
 
-        # Extract and process description links if extensions are not None
-        extensions = overview_data.get('extensions', {})
-        description = extensions.get('description', '') if extensions else ''
-        urls = find_urls(description)
-        links = []
-        for url in urls:
-            if 't.me' in url:
-                links.append({'telegram': url})
-            elif 'twitter.com' in url:
-                links.append({'twitter': url})
-            elif 'youtube' not in url:  # Assume other URLs are for website
-                links.append({'website': url})
-
-        # Add extracted links to result
-        result['description'] = links
-
-
-        # Return result dictionary with all the data
         return result
     else:
         print(f"Failed to retrieve token overview for address {address}: HTTP status code {response.status_code}")
@@ -145,58 +98,63 @@ def token_overview(address):
 
 
 def token_security_info(address):
-
-    '''
-
-    bigmatter
-​freeze authority is like renouncing ownership on eth
-
-    Token Security Info:
-{   'creationSlot': 242801308,
-    'creationTime': 1705679481,
-    'creationTx': 'ZJGoayaNDf2dLzknCjjaE9QjqxocA94pcegiF1oLsGZ841EMWBEc7TnDKLvCnE8cCVfkvoTNYCdMyhrWFFwPX6R',
-    'creatorAddress': 'AGWdoU4j4MGJTkSor7ZSkNiF8oPe15754hsuLmwcEyzC',
-    'creatorBalance': 0,
-    'creatorPercentage': 0,
-    'freezeAuthority': None,
-    'freezeable': None,
-    'isToken2022': False,
-    'isTrueToken': None,
-    'lockInfo': None,
-    'metaplexUpdateAuthority': 'AGWdoU4j4MGJTkSor7ZSkNiF8oPe15754hsuLmwcEyzC',
-    'metaplexUpdateAuthorityBalance': 0,
-    'metaplexUpdateAuthorityPercent': 0,
-    'mintSlot': 242801308,
-    'mintTime': 1705679481,
-    'mintTx': 'ZJGoayaNDf2dLzknCjjaE9QjqxocA94pcegiF1oLsGZ841EMWBEc7TnDKLvCnE8cCVfkvoTNYCdMyhrWFFwPX6R',
-    'mutableMetadata': True,
-    'nonTransferable': None,
-    'ownerAddress': None,
-    'ownerBalance': None,
-    'ownerPercentage': None,
-    'preMarketHolder': [],
-    'top10HolderBalance': 357579981.3372284,
-    'top10HolderPercent': 0.6439307358062863,
-    'top10UserBalance': 138709981.9366756,
-    'top10UserPercent': 0.24978920911102176,
-    'totalSupply': 555308143.3354646,
-    'transferFeeData': None,
-    'transferFeeEnable': None}
-    '''
-
-    # API endpoint for getting token security information
+    """
+    Fetch token security information including:
+    - Creation details
+    - Creator info
+    - Token authorities
+    - Holder concentration
+    - Token type (2022, etc)
+    - Transfer fees
+    """
     url = f"{BASE_URL}/token_security?address={address}"
     headers = {"X-API-KEY": BIRDEYE_API_KEY}
 
-    # Sending a GET request to the API
     response = requests.get(url, headers=headers)
-
+    
     if response.status_code == 200:
-        # Parse the JSON response
-        security_data = response.json()['data']
-        print_pretty_json(security_data)
+        security_data = response.json().get('data', {})
+        
+        result = {
+            # Creation Info
+            'creation_time': security_data.get('creationTime'),
+            'creation_tx': security_data.get('creationTx'),
+            'creator_address': security_data.get('creatorAddress'),
+            'creator_balance': security_data.get('creatorBalance', 0),
+            'creator_percentage': security_data.get('creatorPercentage', 0),
+            
+            # Token Authorities
+            'freeze_authority': security_data.get('freezeAuthority'),
+            'freezeable': security_data.get('freezeable'),
+            'metaplex_update_authority': security_data.get('metaplexUpdateAuthority'),
+            'metaplex_authority_balance': security_data.get('metaplexUpdateAuthorityBalance', 0),
+            'metaplex_authority_percent': security_data.get('metaplexUpdateAuthorityPercent', 0),
+            
+            # Token Type
+            'is_token_2022': security_data.get('isToken2022', False),
+            'is_true_token': security_data.get('isTrueToken'),
+            'mutable_metadata': security_data.get('mutableMetadata'),
+            'non_transferable': security_data.get('nonTransferable'),
+            
+            # Holder Concentration
+            'top10_holder_balance': security_data.get('top10HolderBalance', 0),
+            'top10_holder_percent': security_data.get('top10HolderPercent', 0),
+            'top10_user_balance': security_data.get('top10UserBalance', 0),
+            'top10_user_percent': security_data.get('top10UserPercent', 0),
+            'total_supply': security_data.get('totalSupply', 0),
+            
+            # Transfer Fees
+            'transfer_fee_data': security_data.get('transferFeeData'),
+            'transfer_fee_enable': security_data.get('transferFeeEnable'),
+            
+            # Pre-market Info
+            'pre_market_holders': security_data.get('preMarketHolder', [])
+        }
+ 
+        return result
     else:
-        print("Failed to retrieve token security info:", response.status_code)
+        print(f"Failed to retrieve token security info: {response.status_code}")
+        return None
 
 def token_creation_info(address):
 
@@ -265,8 +223,6 @@ def market_buy(token, amount, slippage):
     txId = http_client.send_raw_transaction(bytes(tx), TxOpts(skip_preflight=True)).value
     print(f"https://solscan.io/tx/{str(txId)}")
 
-
-
 def market_sell(QUOTE_TOKEN, amount, slippage):
     import requests
     import sys
@@ -310,8 +266,6 @@ def market_sell(QUOTE_TOKEN, amount, slippage):
     txId = http_client.send_raw_transaction(bytes(tx), TxOpts(skip_preflight=True)).value
     print(f"https://solscan.io/tx/{str(txId)}")
 
-
-
 def get_time_range():
 
     now = datetime.now()
@@ -326,7 +280,6 @@ import math
 def round_down(value, decimals):
     factor = 10 ** decimals
     return math.floor(value * factor) / factor
-
 
 def get_time_range(days_back):
 
@@ -405,8 +358,6 @@ def get_data(address, days_back_4_data, timeframe):
             print("🔑 Check your BIRDEYE_API_KEY in .env file!")
         return pd.DataFrame()
 
-
-
 def fetch_wallet_holdings_og(address):
 
     API_KEY = BIRDEYE_API_KEY  # Assume this is your API key; replace it with the actual one
@@ -456,7 +407,6 @@ def fetch_wallet_token_single(address, token_mint_address):
 
     return df
 
-
 def token_price(address):
     url = f"https://public-api.birdeye.so/defi/price?address={address}"
     headers = {"X-API-KEY": BIRDEYE_API_KEY}
@@ -470,11 +420,6 @@ def token_price(address):
     else:
         return None
     
-# price = token_price('2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv')
-# print(price)
-# time.sleep(897)
-
-
 def get_position(token_mint_address):
     """
     Fetches the balance of a specific token given its mint address from a DataFrame.
@@ -513,7 +458,6 @@ def get_position(token_mint_address):
         # If the token mint address is not found in the DataFrame, return a message indicating so
         print("Token mint address not found in the wallet.")
         return 0  # Indicating no balance found
-
 
 def get_decimals(token_mint_address):
     import requests
@@ -874,7 +818,6 @@ def supply_demand_zones(token_address, timeframe, limit):
 
     return sd_df
 
-
 def elegant_entry(symbol, buy_under):
 
     pos = get_position(symbol)
@@ -954,7 +897,6 @@ def elegant_entry(symbol, buy_under):
         else: chunk_size = size_needed
         chunk_size = int(chunk_size * 10**6)
         chunk_size = str(chunk_size)
-
 
 # like the elegant entry but for breakout so its looking for price > BREAKOUT_PRICE
 def breakout_entry(symbol, BREAKOUT_PRICE):
@@ -1054,8 +996,6 @@ def breakout_entry(symbol, BREAKOUT_PRICE):
         else: chunk_size = size_needed
         chunk_size = int(chunk_size * 10**6)
         chunk_size = str(chunk_size)
-
-
 
 def ai_entry(symbol, amount):
     """AI agent entry function for Moon Dev's trading system 🤖"""
@@ -1285,9 +1225,169 @@ def discover_tokens():
         cprint(f"\n❌ Error in discovery: {str(e)}", "red")
         return []
     
+def simulate_jupiter_buy(token_address, test_amount=1000000):
+    """Simulate a buy order using Jupiter API"""
+    USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    try:
+        quote = requests.get(
+            f'https://quote-api.jup.ag/v6/quote?inputMint={USDC}&outputMint={token_address}&amount={test_amount}&slippageBps=1000'
+        ).json()
+        
+        return {
+            'success': 'error' not in quote,
+            'output_amount': float(quote.get('outAmount', 0)),
+            'price_impact': float(quote.get('priceImpact', 0)),
+            'error': quote.get('error', None)
+        }
+                
+    except Exception as e:
+        return {
+            'success': False,
+            'output_amount': 0,
+            'price_impact': 0,
+            'error': str(e)
+        }
+
+def simulate_jupiter_sell(token_address, amount, slippage=1000):
+    """Simulate a sell order using Jupiter API"""
+    USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    try:
+        quote = requests.get(
+            f'https://quote-api.jup.ag/v6/quote?inputMint={token_address}&outputMint={USDC}&amount={amount}&slippageBps={slippage}'
+        ).json()
+        
+        return {
+            'success': 'error' not in quote,
+            'output_amount': float(quote.get('outAmount', 0)),
+            'price_impact': float(quote.get('priceImpact', 0)),
+            'error': quote.get('error', None)
+        }
+                
+    except Exception as e:
+        return {
+            'success': False,
+            'output_amount': 0,
+            'price_impact': 0,
+            'error': str(e)
+        }
+    
+def check_rugcheck_report(token_address):
+    """
+    Check token's liquidity lock status and market data using Rugcheck API
+    Returns dict with liquidity info and market analysis
+    """
+    try:
+        rugcheck_url = f"https://api.rugcheck.xyz/v1/tokens/{token_address}/report"
+        rugcheck_response = requests.get(rugcheck_url)
+        
+        result = {
+            'liquidity_locked': False,
+            'liquidity_locked_pct': 0,
+            'liquidity_locked_usd': 0,
+            'liquidity_locked_tokens': 0,
+            'total_lp_tokens': 0,
+            'markets_found': 0,
+            'success': False,
+            'error': None
+        }
+        
+        if rugcheck_response.status_code == 200:
+            rugcheck_data = rugcheck_response.json()
+            
+            if 'markets' in rugcheck_data:
+                result['markets_found'] = len(rugcheck_data['markets'])
+                max_locked_pct = 0
+                max_locked_usd = 0
+                max_locked_lp = 0
+                max_total_lp = 0
+                
+                for market in rugcheck_data['markets']:
+                    if 'lp' in market:
+                        lp_data = market['lp']
+                        locked_pct = lp_data.get('lpLockedPct', 0)
+                        locked_usd = lp_data.get('lpLockedUSD', 0)
+                        locked_lp = lp_data.get('lpLocked', 0)
+                        total_lp = lp_data.get('lpTotalSupply', 0)
+                        
+                        if locked_pct > max_locked_pct:
+                            max_locked_pct = locked_pct
+                            max_locked_usd = locked_usd
+                            max_locked_lp = locked_lp
+                            max_total_lp = total_lp
+                
+                result.update({
+                    'liquidity_locked': max_locked_pct > 0,
+                    'liquidity_locked_pct': max_locked_pct,
+                    'liquidity_locked_usd': max_locked_usd,
+                    'liquidity_locked_tokens': max_locked_lp,
+                    'total_lp_tokens': max_total_lp,
+                    'success': True
+                })
+                
+            else:
+                result['error'] = "No markets data found"
+                cprint("No markets data found", "red")
+        else:
+            result['error'] = f"API request failed with status code: {rugcheck_response.status_code}"
+            
+        return result
+            
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'liquidity_locked': False,
+            'liquidity_locked_pct': 0,
+            'liquidity_locked_usd': 0,
+            'liquidity_locked_tokens': 0,
+            'total_lp_tokens': 0,
+            'markets_found': 0
+        }
+    
+
 def check_rugpull_risk_rpc(token_address, test_amount=1000000):
     try:
+        analysis_result = {
+            "basic_info": {
+                "risk_level": 0,
+                "token_type": "",
+                "transfer_fee": 0,
+                "max_transfer_fee": "0",
+                "freeze_authority": False,
+                "update_authority": "",
+                "update_authority_is_safe": False,
+                "can_buy": False,
+                "can_sell": False,
+                "liquidity_lock_percentage": 0,
+                "liquidity_lock_usd": 0,
+                "top_10_holders": 0,
+                "top_10_users": 0
+            },
+            "market_data": {
+                "price": 0,
+                "market_cap": 0,
+                "total_supply": 0,
+                "circulating_supply": 0,
+                "creation_date": "",
+                "token_age_days": 0
+            },
+            "trading_activity_30m": {
+                "price_change": 0,
+                "buys": 0,
+                "sells": 0,
+                "buy_volume": 0,
+                "sell_volume": 0,
+                "unique_wallets": 0
+            }
+        }
+
         cprint(f"\n🔍 Analyzing rugpull risk for token {token_address[:8]}...", "white", "on_blue")
+        
+        # Get security info first
+        security_info = token_security_info(token_address)
+        if not security_info:
+            cprint("❌ Failed to get token security information", "red")
+            return None
         
         # First, let's check if this is a Token2022 token
         program_check_payload = {
@@ -1321,7 +1421,6 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
         
         is_token_2022 = program_id == TOKEN_2022
         is_token_program = program_id == TOKEN_PROGRAM
-        
 
         # Display program type nicely
         if is_token_2022:
@@ -1331,7 +1430,6 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
         else:
             cprint("Token Program: Unknown", "red")
 
-      
         if not (is_token_2022 or is_token_program):
             cprint("❌ Unknown token program", "red")
             return None
@@ -1342,326 +1440,144 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
         risk_factors = {
             "transfer_fee": 0,
             "max_transfer_fee": "0",
-            "freeze_authority": False,
-            "permanent_delegate": False,
-            "mint_authority": False,
-            "update_authority": False,
+            "freeze_authority": bool(security_info['freeze_authority']),
+            "update_authority": bool(security_info['metaplex_update_authority']),
             "can_buy": False,
             "can_sell": False,
-            "is_honeypot": False,
             "risk_level": 0,
-            "warnings": [],
-            "is_token2022": is_token_2022
+            "is_token2022": security_info['is_token_2022'],
+            "creation_date": datetime.fromtimestamp(security_info['creation_time']).strftime('%Y-%m-%d %H:%M:%S') if security_info['creation_time'] else None,
+            "token_age_days": (datetime.now() - datetime.fromtimestamp(security_info['creation_time'])).days if security_info['creation_time'] else None
         }
 
-        # Move parsed_data extraction here (only once)
-        parsed_data = program_data['result']['value']['data']['parsed']['info']
+        # Update Authority check (1 point)
+        PUMP_FUN_ADDRESS = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM"
+        if security_info['metaplex_update_authority'] and security_info['metaplex_update_authority'] != PUMP_FUN_ADDRESS:
+            risk_factors["risk_level"] += 1
 
-        # Check authorities (only once)
-        if parsed_data.get('mintAuthority'):
-            risk_factors["mint_authority"] = True
-            risk_factors["warnings"].append("⚠️ Token has mint authority")
-            risk_factors["risk_level"] += 4  # Increased from 2
-        
-        if parsed_data.get('freezeAuthority'):
-            risk_factors["freeze_authority"] = True
-            risk_factors["warnings"].append("⚠️ Token has freeze authority")
-            risk_factors["risk_level"] += 4  # Increased from 2
-
-        # Update authority check
-        update_authority = parsed_data.get('metaplexUpdateAuthority')
-        if update_authority:
-            PUMP_FUN_ADDRESS = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM"
+        # Transfer Fee check (1 point)
+        if security_info['is_token_2022'] and security_info['transfer_fee_enable']:
+            risk_factors["transfer_fee"] = security_info['transfer_fee_data'].get('transferFeeBasisPoints', 0) / 100 if security_info['transfer_fee_data'] else 0
+            risk_factors["max_transfer_fee"] = str(security_info['transfer_fee_data'].get('maximumFee', 0) / 100) if security_info['transfer_fee_data'] else "0"
             
-            risk_factors["update_authority"] = True
-            if update_authority != PUMP_FUN_ADDRESS:
-                risk_factors["warnings"].append("⚠️ Token has custom update authority")
-                risk_factors["risk_level"] += 4  # Increased from 2
+            if risk_factors["transfer_fee"] > 0:
+                risk_factors["risk_level"] += 1
+
+        # Trading simulation checks (2 points each for buy/sell issues)
+        buy_sim = simulate_jupiter_buy(token_address, test_amount)
+        risk_factors["can_buy"] = buy_sim['success']
+        if not buy_sim['success']:
+            risk_factors["risk_level"] += 2
         else:
-            risk_factors["update_authority"] = False
-
-        # Token2022 specific checks
-        if is_token_2022:
+            sell_sim = simulate_jupiter_sell(token_address, int(buy_sim['output_amount']))
+            risk_factors["can_sell"] = sell_sim['success']
+            if not sell_sim['success']:
+                risk_factors["risk_level"] += 2
             
-            try:
-                # Check extensions for transfer fee
-                for extension in parsed_data.get('extensions', []):
-                    if extension.get('extension') == 'transferFeeConfig':
-                        fee_state = extension.get('state', {})
-                        newer_fee = fee_state.get('newerTransferFee', {})
-                        
-                        # Get transfer fee (400 basis points = 4%)
-                        transfer_fee_bps = newer_fee.get('transferFeeBasisPoints', 0)
-                        risk_factors["transfer_fee"] = transfer_fee_bps / 100
-                        
-                        # Get max fee (divide by 1e2 since it's in base units)
-                        max_fee = newer_fee.get('maximumFee', 0)
-                        risk_factors["max_transfer_fee"] = str(max_fee / (10 ** 2))
-                        
-                        # Get epoch
-                        epoch = newer_fee.get('epoch', 0)
-                     
-                        if risk_factors["transfer_fee"] > 0:
-                            risk_factors["risk_level"] += 2  # Base points for having a fee
-                            if risk_factors["transfer_fee"] > 3:
-                                risk_factors["risk_level"] += 4  # Additional points for high fee
-                        break
-                    
-            except Exception as e:
-                cprint(f"❌ Error checking Token2022 features: {str(e)}", "red")
-                cprint(f"Error details: {str(e.__class__.__name__)}", "red")
-
-        # 2. Simulate buy using Jupiter (to detect honeypots)
-        USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-        try:
-            quote = requests.get(
-                f'https://quote-api.jup.ag/v6/quote?inputMint={USDC}&outputMint={token_address}&amount={test_amount}&slippageBps=1000'
-            ).json()
+            # Price impact checks (1 point each)
+            risk_factors["buy_price_impact"] = buy_sim['price_impact']
+            risk_factors["sell_price_impact"] = sell_sim['price_impact']
             
-            if 'error' not in quote:
-                risk_factors["can_buy"] = True
-            else:
-                risk_factors["warnings"].append("❌ Cannot buy token")
-                risk_factors["risk_level"] += 3
-                
-        except Exception as e:
-            risk_factors["warnings"].append("❌ Buy simulation failed")
-            risk_factors["risk_level"] += 2
+            if buy_sim['price_impact'] > 0.05:  # 5%
+                risk_factors["risk_level"] += 1
+            if sell_sim['price_impact'] > 0.05:  # 5%
+                risk_factors["risk_level"] += 1
 
-        # 3. Simulate sell
-        try:
-            output_amount = int(float(quote.get('outAmount', test_amount)))
-            sell_quote = requests.get(
-                f'https://quote-api.jup.ag/v6/quote?inputMint={token_address}&outputMint={USDC}&amount={output_amount}&slippageBps=1000'
-            ).json()
-            
-            if 'error' not in sell_quote:
-                risk_factors["can_sell"] = True
-            else:
-                risk_factors["warnings"].append("❌ Cannot sell token (potential honeypot)")
-                risk_factors["risk_level"] += 3
-                risk_factors["is_honeypot"] = True
-                
-        except Exception as e:
-            risk_factors["warnings"].append("❌ Sell simulation failed")
-            risk_factors["risk_level"] += 2
+        # Liquidity lock check (2 points)
+        rugcheck_data = check_rugcheck_report(token_address)
+        if rugcheck_data['success']:
+            if not rugcheck_data['liquidity_locked'] or rugcheck_data['liquidity_locked_pct'] < 50:
+                risk_factors["risk_level"] += 2
 
-        # Get token security data from Birdeye
-        security_url = f"https://public-api.birdeye.so/defi/token_security?address={token_address}"
-        security_response = requests.get(
-            security_url,
-            headers={
-                "X-API-KEY": BIRDEYE_API_KEY,
-                "accept": "application/json",
-                "x-chain": "solana"
-            }
-        )
+        # Final risk assessment (max 10)
+        risk_factors["risk_level"] = min(risk_factors["risk_level"], 10)
+
+        # Update the analysis_result with basic info data
+        analysis_result["basic_info"].update({
+            "risk_level": risk_factors["risk_level"],
+            "token_type": "Token2022 Program" if is_token_2022 else "Standard Token Program",
+            "transfer_fee": risk_factors["transfer_fee"],
+            "max_transfer_fee": risk_factors["max_transfer_fee"],
+            "freeze_authority": risk_factors["freeze_authority"],
+            "update_authority": security_info["metaplex_update_authority"],
+            "update_authority_is_safe": security_info["metaplex_update_authority"] == PUMP_FUN_ADDRESS,
+            "can_buy": risk_factors["can_buy"],
+            "can_sell": risk_factors["can_sell"],
+            "liquidity_lock_percentage": rugcheck_data.get("liquidity_locked_pct", 0),
+            "liquidity_lock_usd": rugcheck_data.get("liquidity_locked_usd", 0),
+            "top_10_holders": security_info["top10_holder_percent"] * 100,
+            "top_10_users": security_info["top10_user_percent"] * 100
+        })
+
+        # Get overview data first
+        overview_data = token_overview(token_address)
         
-        if security_response.status_code == 200:
-            security_data = security_response.json()
-            if 'data' in security_data:
-                data = security_data['data']
-                
-                # Get creation time from security data
-                creation_time = data.get('creationTime') or data.get('mintTime')  # Try both fields
-                if creation_time:
-                    try:
-                        creation_date = datetime.fromtimestamp(creation_time)
-                        token_age = datetime.now() - creation_date
-                        
-                        risk_factors['creation_date'] = creation_date.strftime('%Y-%m-%d %H:%M:%S')
-                        risk_factors['token_age_days'] = token_age.days
-                        
-                        # Add to risk assessment
-                        if token_age.days < 1:
-                            risk_factors['warnings'].append("⚠️ Token created less than 24 hours ago")
-                            risk_factors['risk_level'] += 3
-                        elif token_age.days < 7:
-                            risk_factors['warnings'].append("⚠️ Token less than 7 days old")
-                            risk_factors['risk_level'] += 1
-                    except Exception as e:
-                        cprint(f"Error processing creation time: {str(e)}", "red")
-                else:
-                    cprint("\nCreation Date: Unable to determine", "red")
-
-                # Get holder concentration
-                top10_holder_percent = data.get('top10HolderPercent', 0)
-                if top10_holder_percent > 0.5:  # If top 10 holders have more than 50%
-                    risk_factors["warnings"].append(f"🚨 High supply concentration: {top10_holder_percent*100:.1f}% held by top 10 holders")
-                    risk_factors["risk_level"] += 3
-                
-                # Get user concentration
-                top10_user_percent = data.get('top10UserPercent', 0)
-                if top10_user_percent > 0.5:  # If top 10 users have more than 50%
-                    risk_factors["warnings"].append(f"🚨 High user concentration: {top10_user_percent*100:.1f}% held by top 10 users")
-                    risk_factors["risk_level"] += 2
-
-
-            market_url = f"https://public-api.birdeye.so/defi/v3/token/market-data?address={token_address}"
-            headers = {
-                "X-API-KEY": BIRDEYE_API_KEY,
-                "accept": "application/json",
-                "x-chain": "solana"
-            }
-            
-            market_response = requests.get(market_url, headers=headers)
-         
-            if market_response.status_code == 200:
-                market_data = market_response.json()
-               
-                data = market_data.get('data', {})
-                # Get all market metrics
-                liquidity = data.get('liquidity', 0)
-                price = data.get('price', 0)
-                circulating_supply = data.get('circulating_supply', 0)
-                market_cap = data.get('marketcap', 0)
-                circulating_market_cap = data.get('circulating_marketcap', 0)
-
-                # Store in risk factors
-                risk_factors['liquidity_usd'] = liquidity
-                risk_factors['price_usd'] = price
-                risk_factors['circulating_supply'] = circulating_supply
-                risk_factors['market_cap_usd'] = market_cap
-                risk_factors['circulating_market_cap'] = circulating_market_cap
-
-            
-        # Show loading message while gathering data
-        cprint("\n⏳ Gathering token information...", "white", "on_blue")
+        # Then update market data including creation date and token age
+        analysis_result["market_data"].update({
+            "price": overview_data.get("price_usd", 0) if overview_data else 0,
+            "market_cap": overview_data.get("mc", 0) if overview_data else 0,
+            "total_supply": overview_data.get("total_supply", 0) if overview_data else 0,
+            "circulating_supply": overview_data.get("circulating_supply", 0) if overview_data else 0,
+            "creation_date": risk_factors["creation_date"],
+            "token_age_days": risk_factors["token_age_days"]
+        })
         
-        # Final risk assessment
-        risk_factors["risk_level"] = min(risk_factors["risk_level"], 20)  # Max is now 20
-        
-        # Print summary
+        # Update trading activity if we have overview data
+        if overview_data:
+            analysis_result["trading_activity_30m"].update({
+                "price_change": overview_data.get("price_change_30m", 0),
+                "buys": overview_data.get("buy30m", 0),
+                "sells": overview_data.get("sell30m", 0),
+                "buy_volume": overview_data.get("vBuy30mUSD", 0),
+                "sell_volume": overview_data.get("vSell30mUSD", 0),
+                "unique_wallets": overview_data.get("uniqueWallet30m", 0)
+            })
+
+        # Print formatted analysis
         cprint("\n📊 Token Analysis:", "white", "on_blue")
-        cprint(f"Risk Level: {risk_factors['risk_level']}/20", 
-               "green" if risk_factors['risk_level'] < 7 else "yellow" if risk_factors['risk_level'] < 14 else "red")
+        cprint(f"Risk Level: {analysis_result['basic_info']['risk_level']}/10", 
+               "green" if analysis_result['basic_info']['risk_level'] < 4 else "yellow" if analysis_result['basic_info']['risk_level'] < 7 else "red")
         
-        # Program Type
-        if is_token_2022:
-            cprint("Token Type: Token2022 Program 🔷", "cyan")
-        else:
-            cprint("Token Type: Standard Token Program", "cyan")
-        
-        # Transfer Fee
-        if risk_factors['transfer_fee'] > 0:
-            cprint(f"Transfer Fee: {risk_factors['transfer_fee']}% ❌", "red")
-            if 'epoch' in locals():
-                cprint(f"Fee Activation Epoch: {epoch} ⏰", "yellow")
-        else:
-            cprint("Transfer Fee: 0% ✅", "green")
-        
-        # Max Transfer Fee
-        if float(risk_factors['max_transfer_fee']) > 0:
-            cprint(f"Max Transfer Fee: {risk_factors['max_transfer_fee']} ❌", "red")
-        else:
-            cprint("Max Transfer Fee: 0 ✅", "green")
-        
-        # Freeze Authority
-        cprint(f"Freeze Authority: {risk_factors['freeze_authority']} {'❌' if risk_factors['freeze_authority'] else '✅'}", 
-               "red" if risk_factors['freeze_authority'] else "green")
-        
-        # Permanent Delegate
-        cprint(f"Permanent Delegate: {risk_factors['permanent_delegate']} {'❌' if risk_factors['permanent_delegate'] else '✅'}", 
-               "red" if risk_factors['permanent_delegate'] else "green")
-        
-        # Mint Authority
-        cprint(f"Mint Authority: {risk_factors['mint_authority']} {'❌' if risk_factors['mint_authority'] else '✅'}", 
-               "red" if risk_factors['mint_authority'] else "green")
-        
-        # Update Authority
-        if risk_factors['update_authority']:
-            if update_authority == PUMP_FUN_ADDRESS:
-                cprint("Update Authority: pump.fun ✅", "green")
-            else:
-                cprint(f"Update Authority: {update_authority} ❌", "red")
-        else:
-            cprint("Update Authority: None ✅", "green")
-        
-        # Trading Status
-        cprint(f"Can Buy: {risk_factors['can_buy']} {'✅' if risk_factors['can_buy'] else '❌'}", 
-               "green" if risk_factors['can_buy'] else "red")
-        cprint(f"Can Sell: {risk_factors['can_sell']} {'✅' if risk_factors['can_sell'] else '❌'}", 
-               "green" if risk_factors['can_sell'] else "red")
-        
-        # Honeypot Status
-        if risk_factors["is_honeypot"]:
-            cprint("Honeypot Check: Potential Honeypot Detected! ❌", "red")
-        else:
-            cprint("Honeypot Check: Not Detected ✅", "green")
-        
-        # Liquidity
-        if 'liquidity_usd' in risk_factors:
-            liquidity = risk_factors['liquidity_usd']
-            liquidity_color = "red" if liquidity < 1000 else "yellow" if liquidity < 10000 else "green"
-            cprint(f"Liquidity: ${liquidity:,.2f} {'❌' if liquidity < 1000 else '⚠️' if liquidity < 10000 else '✅'}", 
-                   liquidity_color)
-        
-          # Market Metrics
-        cprint(f"Price: ${risk_factors['price_usd']:.8f}", "cyan")
-        cprint(f"Market Cap: ${risk_factors['market_cap_usd']:,.2f}", "cyan")
-        cprint(f"Circulating Supply: {risk_factors['circulating_supply']:,.0f}", "cyan")
-        cprint(f"Circulating Market Cap: ${risk_factors['circulating_market_cap']:,.2f}", "cyan")
-        # Creation Date and Age
-        if 'creation_date' in risk_factors:
-            age_color = "red" if risk_factors['token_age_days'] < 1 else "yellow" if risk_factors['token_age_days'] < 7 else "green"
-            cprint(f"\nCreation Date: {risk_factors['creation_date']}", age_color)
-            cprint(f"Token Age: {risk_factors['token_age_days']} days {'❌' if risk_factors['token_age_days'] < 1 else '⚠️' if risk_factors['token_age_days'] < 7 else '✅'}", 
-                   age_color)
-        else:
-            cprint("\nCreation Date: Unable to determine", "red")
+        cprint(f"Token Type: {analysis_result['basic_info']['token_type']}", "cyan")
+        cprint(f"Transfer Fee: {analysis_result['basic_info']['transfer_fee']}% {'✅' if analysis_result['basic_info']['transfer_fee'] == 0 else '❌'}", 
+               "green" if analysis_result['basic_info']['transfer_fee'] == 0 else "red")
+        cprint(f"Max Transfer Fee: {analysis_result['basic_info']['max_transfer_fee']} {'✅' if float(analysis_result['basic_info']['max_transfer_fee']) == 0 else '❌'}", 
+               "green" if float(analysis_result['basic_info']['max_transfer_fee']) == 0 else "red")
+        cprint(f"Freeze Authority: {analysis_result['basic_info']['freeze_authority']} {'✅' if not analysis_result['basic_info']['freeze_authority'] else '❌'}", 
+               "green" if not analysis_result['basic_info']['freeze_authority'] else "red")
+        cprint(f"Update Authority: {analysis_result['basic_info']['update_authority']} {'✅' if analysis_result['basic_info']['update_authority_is_safe'] else '❌'}", 
+               "green" if analysis_result['basic_info']['update_authority_is_safe'] else "red")
+        cprint(f"Can Buy: {analysis_result['basic_info']['can_buy']} {'✅' if analysis_result['basic_info']['can_buy'] else '❌'}", 
+               "green" if analysis_result['basic_info']['can_buy'] else "red")
+        cprint(f"Can Sell: {analysis_result['basic_info']['can_sell']} {'✅' if analysis_result['basic_info']['can_sell'] else '❌'}", 
+               "green" if analysis_result['basic_info']['can_sell'] else "red")
+        cprint(f"Liquidity Lock: {analysis_result['basic_info']['liquidity_lock_percentage']}% (${analysis_result['basic_info']['liquidity_lock_usd']:,.2f}) {'✅' if analysis_result['basic_info']['liquidity_lock_percentage'] >= 50 else '❌'}", 
+               "green" if analysis_result['basic_info']['liquidity_lock_percentage'] >= 50 else "red")
+        cprint(f"Top 10 Holders: {analysis_result['basic_info']['top_10_holders']:.1f}% {'✅' if analysis_result['basic_info']['top_10_holders'] <= 50 else '❌'}", 
+               "green" if analysis_result['basic_info']['top_10_holders'] <= 50 else "red")
+        cprint(f"Top 10 Users: {analysis_result['basic_info']['top_10_users']:.1f}% {'✅' if analysis_result['basic_info']['top_10_users'] <= 50 else '❌'}", 
+               "green" if analysis_result['basic_info']['top_10_users'] <= 50 else "red")
 
-        # Check liquidity lock status using Helius DAS
-        try:
-            das_payload = {
-                "jsonrpc": "2.0",
-                "id": "my-id",
-                "method": "searchAssets",
-                "params": {
-                    "ownerAddress": token_address,
-                    "page": 1,
-                    "limit": 1000,
-                    "displayOptions": {
-                        "showUnverifiedCollections": True
-                    }
-                }
-            }
-            
-            cprint("\nChecking liquidity lock status...", "yellow")
-            das_response = requests.post(
-                os.getenv("RPC_ENDPOINT"), 
-                json=das_payload,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            cprint(f"Debug: DAS Response Status: {das_response.status_code}", "yellow")
-            if das_response.status_code == 200:
-                das_data = das_response.json()
-                cprint(f"Debug: DAS Response: {str(das_data)}", "yellow")
-                
-                if 'result' in das_data and das_data['result'].get('items'):
-                    # Filter for LP tokens in the response
-                    lp_tokens = [item for item in das_data['result']['items'] 
-                               if 'LP' in str(item.get('content', {}).get('metadata', {}).get('symbol', ''))]
-                    
-                    if lp_tokens:
-                        cprint("Liquidity Lock: Found LP tokens ✅", "green")
-                        risk_factors['liquidity_locked'] = True
-                    else:
-                        cprint("Liquidity Lock: No LP tokens found ❌", "red")
-                        risk_factors['liquidity_locked'] = False
-                        risk_factors["risk_level"] += 2
-                else:
-                    cprint("Liquidity Lock: No LP data found ❌", "red")
-                    risk_factors['liquidity_locked'] = False
-                    risk_factors["risk_level"] += 2
-            else:
-                cprint(f"Unable to check liquidity lock status. Error: {das_response.text}", "red")
-                
-        except Exception as e:
-            cprint(f"Error checking liquidity lock: {str(e)}", "red")
-            cprint(f"Error type: {type(e)}", "red")
+        cprint("\nMarket Data:", "cyan")
+        cprint(f"Price: ${analysis_result['market_data']['price']:,.12f}", "white")
+        cprint(f"Market Cap: ${analysis_result['market_data']['market_cap']:,.2f}", "white")
+        cprint(f"Total Supply: {analysis_result['market_data']['total_supply']:,.0f}", "white")
+        cprint(f"Circulating Supply: {analysis_result['market_data']['circulating_supply']:,.0f}", "white")
+        cprint(f"Creation Date: {analysis_result['market_data']['creation_date']}", "white")
+        cprint(f"Token Age: {analysis_result['market_data']['token_age_days']} days", "white")
 
-        return risk_factors
+        cprint("\n30m Trading Activity:", "cyan")
+        cprint(f"Price Change: {analysis_result['trading_activity_30m']['price_change']:+.2f}%", 
+               "green" if analysis_result['trading_activity_30m']['price_change'] >= 0 else "red")
+        cprint(f"Buys: {analysis_result['trading_activity_30m']['buys']}", "white")
+        cprint(f"Sells: {analysis_result['trading_activity_30m']['sells']}", "white")
+        cprint(f"Buy Volume: ${analysis_result['trading_activity_30m']['buy_volume']:,.2f}", "white")
+        cprint(f"Sell Volume: ${analysis_result['trading_activity_30m']['sell_volume']:,.2f}", "white")
+        cprint(f"Unique Wallets: {analysis_result['trading_activity_30m']['unique_wallets']}", "white")
+
+        cprint("✅ Analysis completed", "green")
+
+        return analysis_result
 
     except Exception as e:
         cprint(f"\n❌ Error in token analysis: {str(e)}", "red")
