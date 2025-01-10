@@ -19,6 +19,11 @@ TWITTER_USERNAME=your_twitter_username_here
 TWITTER_EMAIL=your_twitter_email_here
 TWITTER_PASSWORD=your_twitter_password_here
 
+# google keys
+GOOGLE_APPLICATION_CREDENTIALS=your_google_credentials_path
+
+COINGECKO_API_KEY=your_coingecko_api_key_here
+
 # 🚨 SECURITY REMINDERS:
 # 1. Never print these values in logs
 # 2. Never share your .env file

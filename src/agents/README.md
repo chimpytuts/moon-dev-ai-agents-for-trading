@@ -14,6 +14,11 @@
 [] liquidation trading agent
 [] open interest trading  agent
 [] funding rate trading agent 
+[] coin gecko agent - if i give a agent or swarm access to all of coingecko data from 2014, it will be able to cook no doubt.
+    - i want these agents to look for high volume tokens that are not on major exchanges
+
+
+
 
 ## moon dev api is in early alpha testing to host data i've been collecting like liquidations, open interest, funding rates, new token launches on solana, solana "good" traders, & recent trades from those traders. apply for access as an alpha tester by posting in the #members_chat with what you're looking to build with the api.
 
