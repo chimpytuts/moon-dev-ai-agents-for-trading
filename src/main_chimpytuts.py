@@ -16,8 +16,9 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 # Import agents
-from src.agents.chimpytuts.trading_agent import TradingAgent
-from src.agents.chimpytuts.risk_agent import RiskAgent
+from src.agents.chimpytuts_agents.trading_agent import TradingAgent
+from src.agents.chimpytuts_agents.risk_agent import RiskAgent
+from src.agents.chimpytuts_agents.token_discovery_agent import TokenDiscoveryAgent
 from src.agents.strategy_agent import StrategyAgent
 from src.agents.copybot_agent import CopyBotAgent
 from src.agents.sentiment_agent import SentimentAgent
@@ -29,13 +30,7 @@ load_dotenv()
 ACTIVE_AGENTS = {
     'risk': True,      # Risk management agent
     'trading': False,   # LLM trading agent
-    'strategy': False,  # Strategy-based trading agent
-    'copybot': False,   # CopyBot agent
-    'sentiment': True, # Run sentiment_agent.py directly instead
-    "token_discovery": True,
-    # whale_agent is run from whale_agent.py
-    # Add more agents here as we build them:
-    # 'portfolio': False,  # Future portfolio optimization agent
+    "token_discovery": True, # Token discovery agent
 }
 
 def run_agents():
@@ -44,18 +39,19 @@ def run_agents():
         # Initialize active agents
         trading_agent = TradingAgent() if ACTIVE_AGENTS['trading'] else None
         risk_agent = RiskAgent() if ACTIVE_AGENTS['risk'] else None
-        strategy_agent = StrategyAgent() if ACTIVE_AGENTS['strategy'] else None
-        copybot_agent = CopyBotAgent() if ACTIVE_AGENTS['copybot'] else None
-        sentiment_agent = SentimentAgent() if ACTIVE_AGENTS['sentiment'] else None
+        token_discovery_agent = TokenDiscoveryAgent() if ACTIVE_AGENTS['token_discovery'] else None
 
         while True:
             try:
+                if token_discovery_agent:
+                    cprint("\n🔍 Running Token Discovery...", "cyan")
+                    token_discovery_agent.analyze_tokens()
                 # Run Risk Management
                 if risk_agent:
                     cprint("\n🛡️ Running Risk Management...", "cyan")
-                    risk_agent.run()
+                    risk_agent.should_override_limit()
 
-            # Sleep until next cycle
+                # Sleep until next cycle
                 next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
                 cprint(f"\n😴 Sleeping until {next_run.strftime('%H:%M:%S')}", "cyan")
                 time.sleep(60 * SLEEP_BETWEEN_RUNS_MINUTES)

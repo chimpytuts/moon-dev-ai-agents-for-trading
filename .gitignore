@@ -77,3 +77,4 @@ src/agents/api_data
 cookies.json
 data/
 testnet.py
+src/agents/chimpytuts_agents/prompts/*
