@@ -12,8 +12,20 @@ EXCLUDED_TOKENS = [USDC_ADDRESS, SOL_ADDRESS]
 
 # Token List for Trading 📋
 MONITORED_TOKENS = [
-    'DWDnYfhVMnNBbWz4uEVvLVZLdYQoSuBosSU2vmHSpump',    # New discovered token
-    '52M75rVDKxNXXbko1f3qdm5EGGiRVRCWZrfRwPcjF5ui',    # New discovered token
+    'Evi9KCPskVhHzUgMUB8gf2DeCNEazSMYL8kW4LS4Eknu',    # New discovered token
+    '5vb8AXytbQenTds4xKinp1FEoWAK7xoiNZw6hCh4pump',    # New discovered token
+    'FabY4yBrANQse9Fwt8vc2dJYCbtd4eQGetrAvGpZd1GW',    # New discovered token
+    '4rbQrrtXcBgK7ohsy83Y58pEbybt2YywGcTT8vpbpump',    # New discovered token
+    '3UPPBqyW3F9SgP1C6Htrn8riDXa8it4PgjDzRCBqpump',    # New discovered token
+]
+
+
+MONITORED_TOKENS_2 = [
+    '6bicbYB1gsrKZGR4JPnoEpTKh58299r2hY4WSfCo2rK2',    # New discovered token
+    '7sgPzJCB6i8Rzd3MjR8kKbbkg3tQJsGcaWgn9x1Ezjpp',    # New discovered token
+    'AaQCQqZ4YnJKhsee8oudP6CK8EhLt8oVQ1Gu6LDppump',    # New discovered token
+    '5QS7RcHfGUa2ZtrovPvEJMB9coqroiT7H48dPSwFpump',    # New discovered token
+    '4xor8PS1grRgyktp5Wo7pYgGSoWqrSRismSa6rDqpump',    # New discovered token
 ]
 
 # TOKENS TO SELL 📋
@@ -113,4 +125,7 @@ CLOSED_POSITIONS_TXT = '777'
 minimum_trades_in_last_hour = 777
 
 # Token Discovery Agent Settings
-MAX_TOKENS_TO_BE_MONITORED = 2
+MAX_TOKENS_TO_BE_MONITORED = 5
+
+# Logging control flag
+ENABLE_LOGGING = True  # Set to False to disable logging to file

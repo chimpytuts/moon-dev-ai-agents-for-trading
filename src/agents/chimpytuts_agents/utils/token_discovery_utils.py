@@ -214,6 +214,7 @@ def check_rugcheck_report(token_address):
             'liquidity_locked_tokens': 0,
             'total_lp_tokens': 0,
             'markets_found': 0,
+            'market_address': None,
             'success': False,
             'error': None
         }
@@ -223,33 +224,29 @@ def check_rugcheck_report(token_address):
             
             if 'markets' in rugcheck_data:
                 result['markets_found'] = len(rugcheck_data['markets'])
-                max_locked_pct = 0
-                max_locked_usd = 0
-                max_locked_lp = 0
-                max_total_lp = 0
+                highest_base_price = 0
+                selected_market = None
                 
+                # First find the market with highest base price
                 for market in rugcheck_data['markets']:
-                    if 'lp' in market:
-                        lp_data = market['lp']
-                        locked_pct = lp_data.get('lpLockedPct', 0)
-                        locked_usd = lp_data.get('lpLockedUSD', 0)
-                        locked_lp = lp_data.get('lpLocked', 0)
-                        total_lp = lp_data.get('lpTotalSupply', 0)
-                        
-                        if locked_pct > max_locked_pct:
-                            max_locked_pct = locked_pct
-                            max_locked_usd = locked_usd
-                            max_locked_lp = locked_lp
-                            max_total_lp = total_lp
+                    if market.get('marketType') == 'raydium' and 'lp' in market:
+                        base_price = float(market['lp'].get('basePrice', 0))
+                        if base_price > highest_base_price:
+                            highest_base_price = base_price
+                            selected_market = market
                 
-                result.update({
-                    'liquidity_locked': max_locked_pct > 0,
-                    'liquidity_locked_pct': max_locked_pct,
-                    'liquidity_locked_usd': max_locked_usd,
-                    'liquidity_locked_tokens': max_locked_lp,
-                    'total_lp_tokens': max_total_lp,
-                    'success': True
-                })
+                # Then get the lock data from the selected market
+                if selected_market and 'lp' in selected_market:
+                    lp_data = selected_market['lp']
+                    result.update({
+                        'liquidity_locked': lp_data.get('lpLockedPct', 0) > 0,
+                        'liquidity_locked_pct': lp_data.get('lpLockedPct', 0),
+                        'liquidity_locked_usd': lp_data.get('lpLockedUSD', 0),
+                        'liquidity_locked_tokens': lp_data.get('lpLocked', 0),
+                        'total_lp_tokens': lp_data.get('lpTotalSupply', 0),
+                        'market_address': selected_market.get('pubkey'),
+                        'success': True
+                    })
                 
             else:
                 result['error'] = "No markets data found"
@@ -268,9 +265,35 @@ def check_rugcheck_report(token_address):
             'liquidity_locked_usd': 0,
             'liquidity_locked_tokens': 0,
             'total_lp_tokens': 0,
-            'markets_found': 0
+            'markets_found': 0,
+            'market_address': None
         }
     
+
+def format_time_difference(timestamp):
+    """Format time difference into detailed age"""
+    if not timestamp:
+        return "Unknown"
+        
+    now = datetime.now()
+    diff = now - datetime.fromtimestamp(timestamp)
+    
+    days = diff.days
+    hours = diff.seconds // 3600
+    minutes = (diff.seconds % 3600) // 60
+    seconds = diff.seconds % 60
+    
+    age_parts = []
+    if days > 0:
+        age_parts.append(f"{days}d")
+    if hours > 0:
+        age_parts.append(f"{hours}h")
+    if minutes > 0:
+        age_parts.append(f"{minutes}m")
+    if seconds > 0 or not age_parts:
+        age_parts.append(f"{seconds}s")
+        
+    return " ".join(age_parts)
 
 def check_rugpull_risk_rpc(token_address, test_amount=1000000):
     try:
@@ -405,6 +428,7 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
         PUMP_FUN_ADDRESS = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM"
         if security_info['metaplex_update_authority'] and security_info['metaplex_update_authority'] != PUMP_FUN_ADDRESS:
             risk_factors["risk_level"] += 1
+            risk_factors["warnings"].append(f"🚨 Update Authority not verified: {security_info['metaplex_update_authority']}")
 
         # Freeze Authority check (1 point)
         if risk_factors["freeze_authority"]:
@@ -423,16 +447,67 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
             
             if risk_factors["transfer_fee"] > 0:
                 risk_factors["risk_level"] += 1
+                risk_factors["warnings"].append(f"🚨 Token has transfer fee: {risk_factors['transfer_fee']}%")
 
         # Liquidity lock check (2 points)
         rugcheck_data = check_rugcheck_report(token_address)
+        market_creation_time = None
+        
         if rugcheck_data['success']:
             if not rugcheck_data['liquidity_locked'] or rugcheck_data['liquidity_locked_pct'] < 50:
                 risk_factors["risk_level"] += 2
+                risk_factors["warnings"].append(f"🚨 Low liquidity lock percentage: {rugcheck_data.get('liquidity_locked_pct', 0)}%")
             # Check for low liquidity (1 point)
             if rugcheck_data.get('liquidity_locked_usd', 0) < 30000:
                 risk_factors["risk_level"] += 1
-                risk_factors["warnings"].append("🚨 Low liquidity lock value (<$30k)")
+                risk_factors["warnings"].append("🚨 Low liquidity lock value (<$30,000)")
+                
+            # Get market creation time from the market with highest base price
+            if rugcheck_data['success'] and 'markets' in rugcheck_data:
+                try:
+                    # Find market with highest base price
+                    highest_base_price = 0
+                    lp_token_address = None
+                    
+                    for market in rugcheck_data.get('markets', []):
+                        if 'lp' in market:
+                            base_price = float(market['lp'].get('basePrice', 0))
+                            if base_price > highest_base_price:
+                                highest_base_price = base_price
+                                lp_token_address = market['liquidityB']  # This is the LP token address
+                    
+                    if lp_token_address:
+                        # Get the first mint transaction for this LP token
+                        mint_payload = {
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "getSignaturesForAddress",
+                            "params": [
+                                lp_token_address,
+                                {
+                                    "limit": 1,
+                                    "commitment": "confirmed",
+                                    "searchTransactionHistory": true
+                                }
+                            ]
+                        }
+                        
+                        mint_response = requests.post(os.getenv("RPC_ENDPOINT"), json=mint_payload)
+                        if mint_response.status_code == 200:
+                            mint_data = mint_response.json()
+                            if mint_data.get('result') and len(mint_data['result']) > 0:
+                                market_creation_time = mint_data['result'][0].get('blockTime')
+                                if market_creation_time:
+                                    cprint(f"First LP token mint time found: {datetime.fromtimestamp(market_creation_time)}", "cyan")
+                except Exception as e:
+                    cprint(f"❌ Error getting LP token mint time: {str(e)}", "red")
+                    market_creation_time = None
+
+        # Risk level warning
+        if risk_factors["risk_level"] >= 7:
+            risk_factors["warnings"].append(f"🚨 High Risk Token: Risk Level {risk_factors['risk_level']}/10")
+        elif risk_factors["risk_level"] >= 4:
+            risk_factors["warnings"].append(f"⚠️ Medium Risk Token: Risk Level {risk_factors['risk_level']}/10")
 
         # Update the analysis_result with basic info data
         analysis_result["basic_info"].update({
@@ -453,13 +528,14 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
         overview_data = token_overview(token_address)
         
         # Then update market data
+        creation_time = market_creation_time or security_info['creation_time']
         analysis_result["market_data"].update({
             "price": overview_data.get("price_usd", 0) if overview_data else 0,
             "market_cap": overview_data.get("mc", 0) if overview_data else 0,
             "total_supply": overview_data.get("total_supply", 0) if overview_data else 0,
             "circulating_supply": overview_data.get("circulating_supply", 0) if overview_data else 0,
-            "creation_date": datetime.fromtimestamp(security_info['creation_time']).strftime('%Y-%m-%d %H:%M:%S') if security_info['creation_time'] else "",
-            "token_age_days": (datetime.now() - datetime.fromtimestamp(security_info['creation_time'])).days if security_info['creation_time'] else 0
+            "creation_date": datetime.fromtimestamp(creation_time).strftime('%Y-%m-%d %H:%M:%S') if creation_time else "",
+            "token_age": format_time_difference(creation_time) if creation_time else "Unknown"
         })
         
         # Update trading activity if we have overview data
@@ -535,24 +611,34 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
             # Market Data
             cprint("\nMarket Data:", "cyan")
             market_data = analysis_result.get('market_data', {})
-            cprint(f"Price: ${market_data.get('price', 0):,.12f}", "white")
-            cprint(f"Market Cap: ${market_data.get('market_cap', 0):,.2f}", "white")
-            cprint(f"Total Supply: {market_data.get('total_supply', 0):,.0f}", "white")
-            cprint(f"Circulating Supply: {market_data.get('circulating_supply', 0):,.0f}", "white")
+            cprint(f"Price: ${market_data.get('price', 0) or 0:,.12f}", "white")
+            cprint(f"Market Cap: ${market_data.get('market_cap', 0) or 0:,.2f}", "white")
+            cprint(f"Total Supply: {market_data.get('total_supply', 0) or 0:,.0f}", "white")
+            cprint(f"Circulating Supply: {market_data.get('circulating_supply', 0) or 0:,.0f}", "white")
             cprint(f"Creation Date: {market_data.get('creation_date', 'Unknown')}", "white")
-            cprint(f"Token Age: {market_data.get('token_age_days', 0)} days", "white")
+            cprint(f"Token Age: {market_data.get('token_age', 'Unknown')}", "white")
 
             # Trading Activity
             cprint("\n30m Trading Activity:", "cyan")
             trading = analysis_result.get('trading_activity_30m', {})
-            price_change = trading.get('price_change', 0)
+            
+            # Price Change with null check
+            price_change = trading.get('price_change', 0) or 0
             cprint(f"Price Change: {price_change:+.2f}%", 
                    "green" if price_change >= 0 else "red")
-            cprint(f"Buys: {trading.get('buys', 0)}", "white")
-            cprint(f"Sells: {trading.get('sells', 0)}", "white")
-            cprint(f"Buy Volume: ${trading.get('buy_volume', 0):,.2f}", "white")
-            cprint(f"Sell Volume: ${trading.get('sell_volume', 0):,.2f}", "white")
-            cprint(f"Unique Wallets: {trading.get('unique_wallets', 0)}", "white")
+            
+            # Trading metrics with null checks
+            buys = trading.get('buys', 0) or 0
+            sells = trading.get('sells', 0) or 0
+            buy_volume = trading.get('buy_volume', 0) or 0
+            sell_volume = trading.get('sell_volume', 0) or 0
+            unique_wallets = trading.get('unique_wallets', 0) or 0
+            
+            cprint(f"Buys: {buys}", "white")
+            cprint(f"Sells: {sells}", "white")
+            cprint(f"Buy Volume: ${buy_volume:,.2f}", "white")
+            cprint(f"Sell Volume: ${sell_volume:,.2f}", "white")
+            cprint(f"Unique Wallets: {unique_wallets}", "white")
 
             cprint("✅ Analysis completed", "green")
 

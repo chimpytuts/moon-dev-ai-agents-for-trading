@@ -1,15 +1,42 @@
-"""
-🌙 Moon Dev's AI Trading System
-Main entry point for running trading agents
-"""
-
-import os
 import sys
+from datetime import datetime
+import os
 from termcolor import cprint
 from dotenv import load_dotenv
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from config import *
+
+if ENABLE_LOGGING:
+    # Create logs directory if it doesn't exist
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+
+    # Create log file with timestamp
+    current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_file = f'logs/chimpytuts_{current_time}.log'
+
+    # Class to duplicate stdout/stderr to file
+    class Logger:
+        def __init__(self, filename):
+            self.terminal = sys.stdout
+            self.log = open(filename, 'a', encoding='utf-8')
+
+        def write(self, message):
+            self.terminal.write(message)
+            self.log.write(message)
+            self.log.flush()
+
+        def flush(self):
+            self.terminal.flush()
+            self.log.flush()
+
+    # Redirect stdout and stderr to both terminal and file only if logging is enabled
+    sys.stdout = Logger(log_file)
+    sys.stderr = Logger(log_file)
+    print(f"🗒️ Logging enabled - saving to {log_file}")
+else:
+    print("📝 Logging disabled - output will only show in terminal")
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

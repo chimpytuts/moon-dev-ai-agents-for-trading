@@ -69,7 +69,7 @@ class TokenDiscoveryAgent:
                         # Debug print the complete prompt
                         cprint("\n🤖 Sending prompt to Claude:", "cyan")
                         cprint("-" * 80, "cyan")
-                        cprint(final_prompt, "white")
+                  #      cprint(final_prompt, "white")
                         cprint("-" * 80, "cyan")
                         
                         message = self.client.messages.create(
