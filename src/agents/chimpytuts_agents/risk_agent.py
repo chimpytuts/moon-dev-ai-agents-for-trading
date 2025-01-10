@@ -171,7 +171,7 @@ class RiskAgent():
             
             # Filter for tokens that are both in MONITORED_TOKENS and in our positions
             positions = positions[
-                positions['Mint Address'].isin(MONITORED_TOKENS) & 
+                positions['Mint Address'].isin(TOKENS_TO_SELL) & 
                 ~positions['Mint Address'].isin(EXCLUDED_TOKENS)
             ]
             
@@ -268,21 +268,26 @@ class RiskAgent():
                 )
                 
                 # Get the response content and ensure it's a string
-                response = str(message.content) if message.content else ""
-                # Check if we should override (keep position open)
-                override_active = "OVERRIDE" in response.upper()
-                
+                response_text = message.content[0].text.strip()
+                cprint("\n🧠 Risk Agent Analysis:", "cyan")
+                cprint(response_text, "white")
 
-                # Print the AI's reasoning
-                cprint(f"\n🧠 Risk Agent Analysis for {token} {override_active}:", "white", "on_blue")
-                print(response)
-                
-                if override_active:
+                # Parse the AI's decision from the response
+                decision = None
+                if "RESPECT_LIMIT" in response_text:
+                    decision = "SELL"
+                elif "OVERRIDE_LIMIT" in response_text:
+                    decision = "KEEP"
+        
+                if decision == "SELL":
+                    cprint(f"\n🛡️ Risk Agent recommends closing position for {token}", "white", "on_red")
+                    self.close_position(token)  # Close the position if AI suggests it
+                elif decision == "KEEP":
                     cprint(f"\n🤖 Risk Agent suggests keeping position for {token} open", "white", "on_yellow")
                 else:
-                    cprint(f"\n🛡️ Risk Agent recommends closing position for {token}", "white", "on_red")
-                   # self.close_position(token)  # Close the position if AI suggests it
-            
+                    cprint(f"\n⚠️ Could not determine clear recommendation from AI. Defaulting to respect limit (SELL)", "white", "on_red")
+                    self.close_position(token)  # Default to closing position if unclear
+
         except Exception as e:
             cprint(f"❌ Error in override check: {str(e)}", "white", "on_red")
             return

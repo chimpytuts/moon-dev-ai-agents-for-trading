@@ -28,7 +28,7 @@ load_dotenv()
 
 # Agent Configuration
 ACTIVE_AGENTS = {
-    'risk': True,      # Risk management agent
+    'risk': False,      # Risk management agent
     'trading': False,   # LLM trading agent
     "token_discovery": True, # Token discovery agent
 }
@@ -49,7 +49,8 @@ def run_agents():
                 # Run Risk Management
                 if risk_agent:
                     cprint("\n🛡️ Running Risk Management...", "cyan")
-                    risk_agent.should_override_limit()
+                    limit_type = 'percentage' if USE_PERCENTAGE else 'USD'
+                    risk_agent.should_override_limit(limit_type)
 
                 # Sleep until next cycle
                 next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)

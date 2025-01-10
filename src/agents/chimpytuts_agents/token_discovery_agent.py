@@ -5,10 +5,11 @@ Analyzes new tokens using rugpull risk checks and AI evaluation
 
 import anthropic
 import os
+import time
 from termcolor import cprint
 from dotenv import load_dotenv
-from src import nice_funcs as n
-from src.config import MAX_TOKENS_TO_BE_MONITORED, MONITORED_TOKENS
+from .utils.token_discovery_utils import get_new_listings, check_rugpull_risk_rpc
+from src.config import MAX_TOKENS_TO_BE_MONITORED
 from .prompts.token_discorver_prompt import TOKEN_EVALUATION_PROMPT  # Added this import
 
 load_dotenv()
@@ -24,7 +25,7 @@ class TokenDiscoveryAgent:
         try:
             # Get new listings
             cprint("\n🔍 Fetching new token listings...", "cyan")
-            new_tokens = n.get_new_listings()
+            new_tokens = get_new_listings()
             if not new_tokens:
                 cprint("No new tokens found", "yellow")
                 return []
@@ -42,7 +43,7 @@ class TokenDiscoveryAgent:
                     
                     for attempt in range(max_retries):
                         try:
-                            risk_analysis = n.check_rugpull_risk_rpc(token)
+                            risk_analysis = check_rugpull_risk_rpc(token)
                             if risk_analysis:
                                 break
                             time.sleep(2)  # Wait 2 seconds between retries
@@ -137,7 +138,7 @@ class TokenDiscoveryAgent:
             return top_tokens
 
         except Exception as e:
-            cprint(f"❌ Error in token analysis: {str(e)}", "red")
+            cprint(f"❌ Error in token analysis Agent: {str(e)}", "red")
             return []
 
     def update_monitored_tokens(self, new_tokens):
@@ -185,6 +186,7 @@ SECURITY METRICS:
 • Max Transfer Fee: {analysis['basic_info']['max_transfer_fee']}
 • Freeze Authority: {analysis['basic_info']['freeze_authority']}
 • Update Authority: {analysis['basic_info']['update_authority']}
+• Mint Authority: {analysis['basic_info'].get('mint_authority', False)}
 • Liquidity Lock: {analysis['basic_info']['liquidity_lock_percentage']}% (${analysis['basic_info']['liquidity_lock_usd']:,.2f})
 • Supply Concentration: {analysis['basic_info']['supply_concentration']:.1f}%
 • Is Rugpull: {analysis['basic_info']['is_rugpull']}

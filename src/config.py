@@ -16,6 +16,11 @@ MONITORED_TOKENS = [
     '52M75rVDKxNXXbko1f3qdm5EGGiRVRCWZrfRwPcjF5ui',    # New discovered token
 ]
 
+# TOKENS TO SELL 📋
+TOKENS_TO_SELL = [
+    'DS6qJNTGJUz26tjC6G75hGXGA6dvEyyiupS7okhLpump',    # New discovered token
+]
+
 TOKENS_MARKET_ANALYSIS = [
     {'address': '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh', 'name': 'BTC'},
     {'address': '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs', 'name': 'ETH'},
