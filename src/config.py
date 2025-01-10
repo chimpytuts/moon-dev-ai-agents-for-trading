@@ -12,16 +12,8 @@ EXCLUDED_TOKENS = [USDC_ADDRESS, SOL_ADDRESS]
 
 # Token List for Trading 📋
 MONITORED_TOKENS = [
-   'DS6qJNTGJUz26tjC6G75hGXGA6dvEyyiupS7okhLpump',    # 🌬️ FART
-   # '8nQBuF666JEuSGR6FLitmXDCvH2QJrnvwvVrK6oepump',    # 💵 USDC
-   '8JR5Q3TrMmUkGiVndD3aoKEfVksvqFBDupRdEdSPskmJ',    # 🤖 SWARMZ
-   #'FmqiF8XZ3XQgGYq9jriqh3nTPJrNcGhWChbmJzG9LhYB',     # 🎮 GG Solana
-    # 'KENJSUYLASHUMfHyy5o4Hp2FdNqZg1AsUPhfH2kYvEP',   # GRIFFAIN
-   # '8x5VqbHA8D7NkD52uNuS5nnt3PwA3pLD34ymskeSo2Wn',    # 🧠 ZEREBRO
-    # 'CnGb7hJsGdsFyQP2uXNWrUgT5K1tovBA3mNnUZcTpump',    # 😎 CHILL GUY
-    # 'ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY',    # 🌙 MOODENG
-    #'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',    # 🐕 WIF
-    #'7uCHQdxAz2ojRgEpXRHas1nJAeTTo9b7JWNgpXXi9D9p' # CAT
+    'DWDnYfhVMnNBbWz4uEVvLVZLdYQoSuBosSU2vmHSpump',    # New discovered token
+    '52M75rVDKxNXXbko1f3qdm5EGGiRVRCWZrfRwPcjF5ui',    # New discovered token
 ]
 
 TOKENS_MARKET_ANALYSIS = [
@@ -114,3 +106,6 @@ EXIT_ALL_POSITIONS = False
 DO_NOT_TRADE_LIST = ['777']
 CLOSED_POSITIONS_TXT = '777'
 minimum_trades_in_last_hour = 777
+
+# Token Discovery Agent Settings
+MAX_TOKENS_TO_BE_MONITORED = 2

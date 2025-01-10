@@ -76,3 +76,4 @@ src/dev
 src/agents/api_data
 cookies.json
 data/
+testnet.py

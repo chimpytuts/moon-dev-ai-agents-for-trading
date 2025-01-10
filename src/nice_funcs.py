@@ -1179,21 +1179,29 @@ def get_trending_tokens():
         return []
 
 def get_new_listings():
-    """Fetch newly listed tokens from Birdeye API"""
+    """Fetch newly listed tokens from DexScreener API"""
     try:
-        endpoint = f"{BASE_URL}/v2/tokens/new_listing"
-        response = requests.get(endpoint, headers={"X-API-KEY": BIRDEYE_API_KEY})
+        endpoint = "https://api.dexscreener.com/token-profiles/latest/v1"
+        response = requests.get(endpoint)
         response.raise_for_status()
         
         data = response.json()
-        if 'data' in data and 'items' in data['data']:
-            new_tokens = [item['address'] for item in data['data']['items']]
-            cprint(f"✨ Found {len(new_tokens)} new token listings!", "green")
-            return new_tokens
+        
+        # Filter for Solana tokens and get their addresses
+        solana_tokens = [
+            item['tokenAddress'] for item in data 
+            if item.get('chainId') == 'solana'
+        ]
+        
+        if solana_tokens:
+            cprint(f"✨ Found {len(solana_tokens)} new Solana token listings!", "green")
+            return solana_tokens
+            
+        cprint("No new Solana tokens found", "yellow")
         return []
         
     except Exception as e:
-        cprint(f"❌ Error fetching new listings: {str(e)}", "red")
+        cprint(f"❌ Error fetching new listings from DexScreener: {str(e)}", "red")
         return []
 
 def discover_tokens():
@@ -1224,52 +1232,6 @@ def discover_tokens():
     except Exception as e:
         cprint(f"\n❌ Error in discovery: {str(e)}", "red")
         return []
-    
-def simulate_jupiter_buy(token_address, test_amount=1000000):
-    """Simulate a buy order using Jupiter API"""
-    USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-    try:
-        quote = requests.get(
-            f'https://quote-api.jup.ag/v6/quote?inputMint={USDC}&outputMint={token_address}&amount={test_amount}&slippageBps=1000'
-        ).json()
-        
-        return {
-            'success': 'error' not in quote,
-            'output_amount': float(quote.get('outAmount', 0)),
-            'price_impact': float(quote.get('priceImpact', 0)),
-            'error': quote.get('error', None)
-        }
-                
-    except Exception as e:
-        return {
-            'success': False,
-            'output_amount': 0,
-            'price_impact': 0,
-            'error': str(e)
-        }
-
-def simulate_jupiter_sell(token_address, amount, slippage=1000):
-    """Simulate a sell order using Jupiter API"""
-    USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-    try:
-        quote = requests.get(
-            f'https://quote-api.jup.ag/v6/quote?inputMint={token_address}&outputMint={USDC}&amount={amount}&slippageBps={slippage}'
-        ).json()
-        
-        return {
-            'success': 'error' not in quote,
-            'output_amount': float(quote.get('outAmount', 0)),
-            'price_impact': float(quote.get('priceImpact', 0)),
-            'error': quote.get('error', None)
-        }
-                
-    except Exception as e:
-        return {
-            'success': False,
-            'output_amount': 0,
-            'price_impact': 0,
-            'error': str(e)
-        }
     
 def check_rugcheck_report(token_address):
     """
@@ -1356,12 +1318,10 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
                 "freeze_authority": False,
                 "update_authority": "",
                 "update_authority_is_safe": False,
-                "can_buy": False,
-                "can_sell": False,
                 "liquidity_lock_percentage": 0,
                 "liquidity_lock_usd": 0,
-                "top_10_holders": 0,
-                "top_10_users": 0
+                "supply_concentration": 0,
+                "is_rugpull": False
             },
             "market_data": {
                 "price": 0,
@@ -1442,18 +1402,52 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
             "max_transfer_fee": "0",
             "freeze_authority": bool(security_info['freeze_authority']),
             "update_authority": bool(security_info['metaplex_update_authority']),
-            "can_buy": False,
-            "can_sell": False,
             "risk_level": 0,
             "is_token2022": security_info['is_token_2022'],
-            "creation_date": datetime.fromtimestamp(security_info['creation_time']).strftime('%Y-%m-%d %H:%M:%S') if security_info['creation_time'] else None,
-            "token_age_days": (datetime.now() - datetime.fromtimestamp(security_info['creation_time'])).days if security_info['creation_time'] else None
+            "warnings": []
         }
+
+        # Check supply concentration (3 points)
+        try:
+            payload_largest = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTokenLargestAccounts",
+                "params": [token_address]
+            }
+            
+            response_largest = requests.post(os.getenv("RPC_ENDPOINT"), json=payload_largest)
+            if response_largest.status_code == 200:
+                largest_data = response_largest.json()
+                if 'result' in largest_data:
+                    accounts = largest_data['result']['value']
+                    
+                    total_supply = sum(float(acc['amount']) for acc in accounts)
+                    top_holder_amount = float(accounts[0]['amount']) if accounts else 0
+                    
+                    concentration = (top_holder_amount / total_supply) if total_supply > 0 else 0
+                    if concentration > 0.5:  # More than 50% in one wallet
+                        risk_factors["warnings"].append(f"🚨 High supply concentration: {concentration*100:.1f}% held by single account")
+                        risk_factors["risk_level"] += 3
+                    analysis_result["basic_info"]["supply_concentration"] = concentration * 100
+
+        except Exception as e:
+            cprint(f"❌ Error checking supply concentration: {str(e)}", "red")
 
         # Update Authority check (1 point)
         PUMP_FUN_ADDRESS = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM"
         if security_info['metaplex_update_authority'] and security_info['metaplex_update_authority'] != PUMP_FUN_ADDRESS:
             risk_factors["risk_level"] += 1
+
+        # Freeze Authority check (1 point)
+        if risk_factors["freeze_authority"]:
+            risk_factors["risk_level"] += 1
+            risk_factors["warnings"].append("🚨 Token has freeze authority enabled")
+
+        # Mint Authority check (1 point)
+        if security_info.get('mint_authority'):
+            risk_factors["risk_level"] += 1
+            risk_factors["warnings"].append("🚨 Token has mint authority enabled")
 
         # Transfer Fee check (1 point)
         if security_info['is_token_2022'] and security_info['transfer_fee_enable']:
@@ -1463,34 +1457,15 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
             if risk_factors["transfer_fee"] > 0:
                 risk_factors["risk_level"] += 1
 
-        # Trading simulation checks (2 points each for buy/sell issues)
-        buy_sim = simulate_jupiter_buy(token_address, test_amount)
-        risk_factors["can_buy"] = buy_sim['success']
-        if not buy_sim['success']:
-            risk_factors["risk_level"] += 2
-        else:
-            sell_sim = simulate_jupiter_sell(token_address, int(buy_sim['output_amount']))
-            risk_factors["can_sell"] = sell_sim['success']
-            if not sell_sim['success']:
-                risk_factors["risk_level"] += 2
-            
-            # Price impact checks (1 point each)
-            risk_factors["buy_price_impact"] = buy_sim['price_impact']
-            risk_factors["sell_price_impact"] = sell_sim['price_impact']
-            
-            if buy_sim['price_impact'] > 0.05:  # 5%
-                risk_factors["risk_level"] += 1
-            if sell_sim['price_impact'] > 0.05:  # 5%
-                risk_factors["risk_level"] += 1
-
         # Liquidity lock check (2 points)
         rugcheck_data = check_rugcheck_report(token_address)
         if rugcheck_data['success']:
             if not rugcheck_data['liquidity_locked'] or rugcheck_data['liquidity_locked_pct'] < 50:
                 risk_factors["risk_level"] += 2
-
-        # Final risk assessment (max 10)
-        risk_factors["risk_level"] = min(risk_factors["risk_level"], 10)
+            # Check for low liquidity (1 point)
+            if rugcheck_data.get('liquidity_locked_usd', 0) < 30000:
+                risk_factors["risk_level"] += 1
+                risk_factors["warnings"].append("🚨 Low liquidity lock value (<$30k)")
 
         # Update the analysis_result with basic info data
         analysis_result["basic_info"].update({
@@ -1501,25 +1476,22 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
             "freeze_authority": risk_factors["freeze_authority"],
             "update_authority": security_info["metaplex_update_authority"],
             "update_authority_is_safe": security_info["metaplex_update_authority"] == PUMP_FUN_ADDRESS,
-            "can_buy": risk_factors["can_buy"],
-            "can_sell": risk_factors["can_sell"],
             "liquidity_lock_percentage": rugcheck_data.get("liquidity_locked_pct", 0),
             "liquidity_lock_usd": rugcheck_data.get("liquidity_locked_usd", 0),
-            "top_10_holders": security_info["top10_holder_percent"] * 100,
-            "top_10_users": security_info["top10_user_percent"] * 100
+            "is_rugpull": rugcheck_data.get("is_rugpull", False)
         })
 
         # Get overview data first
         overview_data = token_overview(token_address)
         
-        # Then update market data including creation date and token age
+        # Then update market data
         analysis_result["market_data"].update({
             "price": overview_data.get("price_usd", 0) if overview_data else 0,
             "market_cap": overview_data.get("mc", 0) if overview_data else 0,
             "total_supply": overview_data.get("total_supply", 0) if overview_data else 0,
             "circulating_supply": overview_data.get("circulating_supply", 0) if overview_data else 0,
-            "creation_date": risk_factors["creation_date"],
-            "token_age_days": risk_factors["token_age_days"]
+            "creation_date": datetime.fromtimestamp(security_info['creation_time']).strftime('%Y-%m-%d %H:%M:%S') if security_info['creation_time'] else "",
+            "token_age_days": (datetime.now() - datetime.fromtimestamp(security_info['creation_time'])).days if security_info['creation_time'] else 0
         })
         
         # Update trading activity if we have overview data
@@ -1537,6 +1509,8 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
         cprint("\n📊 Token Analysis:", "white", "on_blue")
         cprint(f"Risk Level: {analysis_result['basic_info']['risk_level']}/10", 
                "green" if analysis_result['basic_info']['risk_level'] < 4 else "yellow" if analysis_result['basic_info']['risk_level'] < 7 else "red")
+        cprint(f"Is Rugpull: {analysis_result['basic_info']['is_rugpull']} {'❌' if analysis_result['basic_info']['is_rugpull'] else '✅'}", 
+               "red" if analysis_result['basic_info']['is_rugpull'] else "green")
         
         cprint(f"Token Type: {analysis_result['basic_info']['token_type']}", "cyan")
         cprint(f"Transfer Fee: {analysis_result['basic_info']['transfer_fee']}% {'✅' if analysis_result['basic_info']['transfer_fee'] == 0 else '❌'}", 
@@ -1547,16 +1521,16 @@ def check_rugpull_risk_rpc(token_address, test_amount=1000000):
                "green" if not analysis_result['basic_info']['freeze_authority'] else "red")
         cprint(f"Update Authority: {analysis_result['basic_info']['update_authority']} {'✅' if analysis_result['basic_info']['update_authority_is_safe'] else '❌'}", 
                "green" if analysis_result['basic_info']['update_authority_is_safe'] else "red")
-        cprint(f"Can Buy: {analysis_result['basic_info']['can_buy']} {'✅' if analysis_result['basic_info']['can_buy'] else '❌'}", 
-               "green" if analysis_result['basic_info']['can_buy'] else "red")
-        cprint(f"Can Sell: {analysis_result['basic_info']['can_sell']} {'✅' if analysis_result['basic_info']['can_sell'] else '❌'}", 
-               "green" if analysis_result['basic_info']['can_sell'] else "red")
         cprint(f"Liquidity Lock: {analysis_result['basic_info']['liquidity_lock_percentage']}% (${analysis_result['basic_info']['liquidity_lock_usd']:,.2f}) {'✅' if analysis_result['basic_info']['liquidity_lock_percentage'] >= 50 else '❌'}", 
                "green" if analysis_result['basic_info']['liquidity_lock_percentage'] >= 50 else "red")
-        cprint(f"Top 10 Holders: {analysis_result['basic_info']['top_10_holders']:.1f}% {'✅' if analysis_result['basic_info']['top_10_holders'] <= 50 else '❌'}", 
-               "green" if analysis_result['basic_info']['top_10_holders'] <= 50 else "red")
-        cprint(f"Top 10 Users: {analysis_result['basic_info']['top_10_users']:.1f}% {'✅' if analysis_result['basic_info']['top_10_users'] <= 50 else '❌'}", 
-               "green" if analysis_result['basic_info']['top_10_users'] <= 50 else "red")
+        cprint(f"Supply Concentration: {analysis_result['basic_info']['supply_concentration']:.1f}% {'✅' if analysis_result['basic_info']['supply_concentration'] <= 50 else '❌'}", 
+               "green" if analysis_result['basic_info']['supply_concentration'] <= 50 else "red")
+
+        # Print any warnings
+        if risk_factors["warnings"]:
+            cprint("\n⚠️ Warnings:", "yellow")
+            for warning in risk_factors["warnings"]:
+                cprint(f"  • {warning}", "yellow")
 
         cprint("\nMarket Data:", "cyan")
         cprint(f"Price: ${analysis_result['market_data']['price']:,.12f}", "white")

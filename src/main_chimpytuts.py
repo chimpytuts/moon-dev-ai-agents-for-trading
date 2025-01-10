@@ -32,6 +32,7 @@ ACTIVE_AGENTS = {
     'strategy': False,  # Strategy-based trading agent
     'copybot': False,   # CopyBot agent
     'sentiment': True, # Run sentiment_agent.py directly instead
+    "token_discovery": True,
     # whale_agent is run from whale_agent.py
     # Add more agents here as we build them:
     # 'portfolio': False,  # Future portfolio optimization agent
@@ -55,9 +56,14 @@ def run_agents():
                     risk_agent.run()
 
             # Sleep until next cycle
-            next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
-            cprint(f"\n😴 Sleeping until {next_run.strftime('%H:%M:%S')}", "cyan")
-            time.sleep(60 * SLEEP_BETWEEN_RUNS_MINUTES)
+                next_run = datetime.now() + timedelta(minutes=SLEEP_BETWEEN_RUNS_MINUTES)
+                cprint(f"\n😴 Sleeping until {next_run.strftime('%H:%M:%S')}", "cyan")
+                time.sleep(60 * SLEEP_BETWEEN_RUNS_MINUTES)
+
+            except Exception as e:
+                cprint(f"\n❌ Error running agents: {str(e)}", "red")
+                cprint("🔄 Continuing to next cycle...", "yellow")
+                time.sleep(60)  # Sleep for 1 minute on error before retrying
 
     except KeyboardInterrupt:
         cprint("\n👋 Gracefully shutting down...", "yellow")
