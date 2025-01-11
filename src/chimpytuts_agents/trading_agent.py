@@ -15,7 +15,7 @@ import time
 # Local imports
 from src.config import *
 from src import nice_funcs as n
-from src.data.ohlcv_collector import collect_all_tokens
+from .utils.trading_agent_utils import collect_all_tokens
 from .prompts.trading_prompt import TRADING_PROMPT  # Added this import
 from .prompts.trading_prompt import ALLOCATION_PROMPT  # Added this import
 

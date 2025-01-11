@@ -6,7 +6,7 @@ from termcolor import colored, cprint
 from dotenv import load_dotenv
 from src import config
 from src import nice_funcs as n
-from src.data.ohlcv_collector import collect_all_tokens
+from .utils.trading_agent_utils import collect_all_tokens
 from datetime import datetime, timedelta
 import time
 from src.config import *
