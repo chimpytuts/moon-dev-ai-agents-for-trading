@@ -31,75 +31,36 @@ class TradingAgent:
     def analyze_market_data(self, token, market_data):
         """Analyze market data using Claude"""
         try:
+            if not market_data:
+                return None
+            
             # Skip analysis for excluded tokens
             if token in EXCLUDED_TOKENS:
                 print(f"⚠️ Skipping analysis for excluded token: {token}")
                 return None
             
-            # Debug: Print market_data info
-            cprint("\nℹ️ Market Data Debug:", "cyan")
-            cprint(f"Columns: {market_data.columns.tolist()}", "cyan")
-            cprint(f"Shape: {market_data.shape}", "cyan")
-            
-            # Convert column names to lowercase for consistency
-            market_data.columns = market_data.columns.str.lower()
-            
-            # Verify required columns exist
-            required_columns = ['close', 'volume', 'ma20', 'ma40', 'rsi']
-            missing_columns = [col for col in required_columns if col not in market_data.columns]
-            
-            if missing_columns:
-                cprint(f"❌ Missing required columns: {missing_columns}", "red")
-                return None
-            
-            # Get highest liquidity market
-            market_address = get_highest_liquidity_market(token)
-            if not market_address:
-                cprint("❌ No valid market found for analysis", "red")
-                return None
-            
-            # Get pair analytics
-            pair_analytics = get_pair_analytics(market_address)
-            if not pair_analytics:
-                cprint("❌ No pair analytics found", "red")
-                return None
-            
-            # Convert DataFrame to dict and prepare combined data for AI analysis
-            try:
-                market_data_dict = {
-                    'ohlcv': market_data.to_dict(orient='records'),
-                    'technical_indicators': {
-                        'ma20': market_data['ma20'].tolist(),
-                        'ma40': market_data['ma40'].tolist(),
-                        'rsi': market_data['rsi'].tolist(),
-                        'latest_close': float(market_data['close'].iloc[-1]),
-                        'latest_volume': float(market_data['volume'].iloc[-1]),
-                        'latest_rsi': float(market_data['rsi'].iloc[-1]),
-                        'latest_ma20': float(market_data['ma20'].iloc[-1]),
-                        'latest_ma40': float(market_data['ma40'].iloc[-1]),
-                    }
-                }
-            except Exception as e:
-                cprint(f"❌ Error converting market data: {str(e)}", "red")
-                cprint(f"Market data head:\n{market_data.head()}", "yellow")
-                return None
-            
+            # Prepare analysis data with the new structure
             analysis_data = {
                 "token_address": token,
-                "market_data": market_data_dict,
-                "pair_analytics": pair_analytics
+                "pair_analytics": market_data['pair_analytics'],
+                "ohlcv_data": market_data['ohlcv_data']
             }
+            
+            # Format the complete prompt
+            prompt = f"{TRADING_PROMPT}\n\nData to Analyze:\n{json.dumps(analysis_data, indent=2)}"
+            
+            # Print the prompt for debugging
+            cprint("\n🤖 Sending prompt to AI:", "cyan")
+            cprint(prompt, "white")
             
             message = self.client.messages.create(
                 model=AI_MODEL,
                 max_tokens=AI_MAX_TOKENS,
                 temperature=AI_TEMPERATURE,
-                messages=[
-                    {
-                        "role": "user", 
-                        "content": f"{TRADING_PROMPT}\n\nData to Analyze:\n{json.dumps(analysis_data, indent=2)}"
-                    }
-                ]
+                messages=[{
+                    "role": "user", 
+                    "content": prompt
+                }]
             )
             
             # Parse the response - handle both string and list responses
