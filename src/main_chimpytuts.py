@@ -43,9 +43,9 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 # Import agents
-from src.agents.chimpytuts_agents.trading_agent import TradingAgent
-from src.agents.chimpytuts_agents.risk_agent import RiskAgent
-from src.agents.chimpytuts_agents.token_discovery_agent import TokenDiscoveryAgent
+from src.chimpytuts_agents.trading_agent import TradingAgent
+from src.chimpytuts_agents.risk_agent import RiskAgent
+from src.chimpytuts_agents.token_discovery_agent import TokenDiscoveryAgent
 from src.agents.strategy_agent import StrategyAgent
 from src.agents.copybot_agent import CopyBotAgent
 from src.agents.sentiment_agent import SentimentAgent

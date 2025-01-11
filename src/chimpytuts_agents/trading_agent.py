@@ -36,16 +36,6 @@ class TradingAgent:
                 print(f"⚠️ Skipping analysis for excluded token: {token}")
                 return None
             
-            # Prepare strategy context
-            strategy_context = ""
-            if 'strategy_signals' in market_data:
-                strategy_context = f"""
-Strategy Signals Available:
-{json.dumps(market_data['strategy_signals'], indent=2)}
-                """
-            else:
-                strategy_context = "No strategy signals available."
-            
             message = self.client.messages.create(
                 model=AI_MODEL,
                 max_tokens=AI_MAX_TOKENS,
@@ -53,7 +43,7 @@ Strategy Signals Available:
                 messages=[
                     {
                         "role": "user", 
-                        "content": f"{TRADING_PROMPT.format(strategy_context=strategy_context)}\n\nMarket Data to Analyze:\n{market_data}"
+                        "content": f"{TRADING_PROMPT}\n\nMarket Data to Analyze:\n{market_data}"
                     }
                 ]
             )
@@ -298,7 +288,7 @@ Example format:
         """Run the trading agent (implements BaseAgent interface)"""
         self.run_trading_cycle()
 
-    def run_trading_cycle(self, strategy_signals=None):
+    def run_trading_cycle(self):
         """Run one complete trading cycle"""
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -318,12 +308,7 @@ Example format:
                     continue  # Skip tokens already in the portfolio
                 
                 cprint(f"\n🤖 AI Agent Analyzing Token: {token}", "white", "on_green")
-                
-                # Include strategy signals in analysis if available
-                if strategy_signals and token in strategy_signals:
-                    cprint(f"📊 Including {len(strategy_signals[token])} strategy signals in analysis", "cyan")
-                    data['strategy_signals'] = strategy_signals[token]
-                
+                            
                 analysis = self.analyze_market_data(token, data)
                 print(f"\n📈 Analysis for contract: {token}")
                 print(analysis)
@@ -336,7 +321,7 @@ Example format:
                         
             # Then proceed with new allocations
             cprint("\n💰 Calculating optimal portfolio allocation...", "white", "on_blue")
-            # allocation = self.allocate_portfolio()
+            allocation = self.allocate_portfolio()
             
             if allocation:
                 cprint("\n💼 Moon Dev's Portfolio Allocation:", "white", "on_blue")
