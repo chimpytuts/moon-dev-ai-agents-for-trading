@@ -56,8 +56,8 @@ load_dotenv()
 # Agent Configuration
 ACTIVE_AGENTS = {
     'risk': False,      # Risk management agent
-    'trading': False,   # LLM trading agent
-    "token_discovery": True, # Token discovery agent
+    'trading': True,   # LLM trading agent
+    "token_discovery": False, # Token discovery agent
 }
 
 def run_agents():
@@ -73,6 +73,11 @@ def run_agents():
                 if token_discovery_agent:
                     cprint("\n🔍 Running Token Discovery...", "cyan")
                     token_discovery_agent.analyze_tokens()
+
+                if trading_agent:
+                    cprint("\n🔍 Running Trading...", "cyan")
+                    trading_agent.run_trading_cycle()
+
                 # Run Risk Management
                 if risk_agent:
                     cprint("\n🛡️ Running Risk Management...", "cyan")

@@ -20,6 +20,10 @@ import pytz
 from solders.pubkey import Pubkey
 
 RUG_CHECK_URL = "https://api.rugcheck.xyz"	
+BIRDEYE_URL = "https://public-api.birdeye.so/defi"
+BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY")
+if not BIRDEYE_API_KEY:
+    raise ValueError("🚨 BIRDEYE_API_KEY not found in environment variables!")
 
 def collect_token_data(token, days_back=DAYSBACK_4_DATA, timeframe=DATA_TIMEFRAME):
     """Collect OHLCV data for a single token"""
@@ -146,153 +150,192 @@ def get_data(address, days_back_4_data, timeframe):
             print("🔑 Check your BIRDEYE_API_KEY in .env file!")
         return pd.DataFrame()
 
-def get_highest_liquidity_market(token_address):
+def get_highest_liquidity_market(token_address, max_retries=3, timeout=10):
     """
     Get the market address with highest base price for a given token using Rugcheck API
     
     Args:
         token_address (str): Token address to check
+        max_retries (int): Maximum number of retry attempts
+        timeout (int): Timeout in seconds for the API call
         
     Returns:
         str: Market address with highest liquidity or None if not found
     """
-    try:
-        rugcheck_url = f"{RUG_CHECK_URL}/v1/tokens/{token_address}/report"
-        rugcheck_response = requests.get(rugcheck_url)
-        
-        if rugcheck_response.status_code != 200:
-            cprint(f"❌ Failed to get rugcheck report: HTTP {rugcheck_response.status_code}", "red")
-            return None
+    for attempt in range(max_retries):
+        try:
+            rugcheck_url = f"{RUG_CHECK_URL}/v1/tokens/{token_address}/report"
+            rugcheck_response = requests.get(rugcheck_url, timeout=timeout)
             
-        rugcheck_data = rugcheck_response.json()
-        
-        if 'markets' not in rugcheck_data:
-            cprint("❌ No markets data found", "red")
-            return None
+            if rugcheck_response.status_code != 200:
+                cprint(f"❌ Failed to get rugcheck report: HTTP {rugcheck_response.status_code}", "red")
+                if attempt < max_retries - 1:
+                    time.sleep(1)  # Wait 1 second before retrying
+                    continue
+                return None
+                
+            rugcheck_data = rugcheck_response.json()
             
-        highest_base_price = 0
-        market_address = None
-        
-        # Find the Raydium market with highest base price
-        for market in rugcheck_data['markets']:
-            if market.get('marketType') == 'raydium' and 'lp' in market:
-                base_price = float(market['lp'].get('basePrice', 0))
-                if base_price > highest_base_price:
-                    highest_base_price = base_price
-                    market_address = market.get('pubkey')
-        
-        if market_address:
-            cprint(f"✅ Found market with highest liquidity: {market_address}", "green")
-        else:
-            cprint("❌ No valid market found", "red")
+            if 'markets' not in rugcheck_data:
+                cprint("❌ No markets data found", "red")
+                return None
+                
+            highest_base_price = 0
+            market_address = None
             
-        return market_address
+            # Find the Raydium market with highest base price
+            for market in rugcheck_data['markets']:
+                if market.get('marketType') == 'raydium' and 'lp' in market:
+                    base_price = float(market['lp'].get('basePrice', 0))
+                    if base_price > highest_base_price:
+                        highest_base_price = base_price
+                        market_address = market.get('pubkey')
+            
+            if market_address:
+                cprint(f"✅ Found market with highest liquidity: {market_address}", "green")
+            else:
+                cprint("❌ No valid market found", "red")
+                
+            return market_address
 
-    except Exception as e:
-        cprint(f"❌ Error getting market address: {str(e)}", "red")
-        return None
+        except requests.exceptions.Timeout:
+            cprint(f"⚠️ Attempt {attempt + 1}/{max_retries}: Rugcheck API timeout", "yellow")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            cprint("❌ All retry attempts failed", "red")
+            return None
+        except requests.exceptions.ConnectionError:
+            cprint(f"⚠️ Attempt {attempt + 1}/{max_retries}: Connection error to Rugcheck API", "yellow")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            cprint("❌ All retry attempts failed", "red")
+            return None
+        except Exception as e:
+            cprint(f"❌ Error getting market address: {str(e)}", "red")
+            return None
 
-def get_pair_analytics(pair_address):
+def get_pair_analytics(pair_address, max_retries=3, timeout=10):
     """
     Fetch and process trading analytics for a pair from DexScreener API
     
     Args:
         pair_address (str): The pair address to analyze
+        max_retries (int): Maximum number of retry attempts
+        timeout (int): Timeout in seconds for the API call
         
     Returns:
         dict: Processed trading metrics or None if failed
     """
-    try:
-        # Make API request to DexScreener
-        dexscreener_url = f"https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
-        response = requests.get(dexscreener_url)
-        
-        if response.status_code != 200:
-            cprint(f"❌ Failed to get pair data: HTTP {response.status_code}", "red")
-            return None
+    for attempt in range(max_retries):
+        try:
+            dexscreener_url = f"https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
+            response = requests.get(dexscreener_url, timeout=timeout)
             
-        data = response.json()
-        pair_data = data.get('pairs', [{}])[0]  # Get first pair from pairs array
-        
-        if not pair_data:
-            cprint("❌ No pair data found", "red")
-            return None
+            if response.status_code != 200:
+                cprint(f"❌ Failed to get pair data: HTTP {response.status_code}", "red")
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+                return None
+                
+            data = response.json()
+            pair_data = data.get('pairs', [{}])[0]
             
-        # Extract relevant metrics
-        analytics = {
-            # Basic pair info
-            'dex': pair_data.get('dexId'),
-            'base_token': {
-                'address': pair_data.get('baseToken', {}).get('address'),
-                'symbol': pair_data.get('baseToken', {}).get('symbol'),
-                'name': pair_data.get('baseToken', {}).get('name')
-            },
-            'quote_token': {
-                'address': pair_data.get('quoteToken', {}).get('address'),
-                'symbol': pair_data.get('quoteToken', {}).get('symbol')
-            },
-            
-            # Price data
-            'price_usd': float(pair_data.get('priceUsd', 0)),
-            'price_native': float(pair_data.get('priceNative', 0)),
-            
-            # Price changes
-            'price_change': {
-                '5m': pair_data.get('priceChange', {}).get('m5', 0),
-                '1h': pair_data.get('priceChange', {}).get('h1', 0),
-                '6h': pair_data.get('priceChange', {}).get('h6', 0),
-                '24h': pair_data.get('priceChange', {}).get('h24', 0)
-            },
-            
-            # Trading activity
-            'transactions': {
-                '5m': {
-                    'buys': pair_data.get('txns', {}).get('m5', {}).get('buys', 0),
-                    'sells': pair_data.get('txns', {}).get('m5', {}).get('sells', 0)
+            if not pair_data:
+                cprint("❌ No pair data found", "red")
+                return None
+                
+            # Extract relevant metrics
+            analytics = {
+                # Basic pair info
+                'dex': pair_data.get('dexId'),
+                'base_token': {
+                    'address': pair_data.get('baseToken', {}).get('address'),
+                    'symbol': pair_data.get('baseToken', {}).get('symbol'),
+                    'name': pair_data.get('baseToken', {}).get('name')
                 },
-                '1h': {
-                    'buys': pair_data.get('txns', {}).get('h1', {}).get('buys', 0),
-                    'sells': pair_data.get('txns', {}).get('h1', {}).get('sells', 0)
+                'quote_token': {
+                    'address': pair_data.get('quoteToken', {}).get('address'),
+                    'symbol': pair_data.get('quoteToken', {}).get('symbol')
                 },
-                '6h': {
-                    'buys': pair_data.get('txns', {}).get('h6', {}).get('buys', 0),
-                    'sells': pair_data.get('txns', {}).get('h6', {}).get('sells', 0)
+                
+                # Price data
+                'price_usd': float(pair_data.get('priceUsd', 0)),
+                'price_native': float(pair_data.get('priceNative', 0)),
+                
+                # Price changes
+                'price_change': {
+                    '5m': pair_data.get('priceChange', {}).get('m5', 0),
+                    '1h': pair_data.get('priceChange', {}).get('h1', 0),
+                    '6h': pair_data.get('priceChange', {}).get('h6', 0),
+                    '24h': pair_data.get('priceChange', {}).get('h24', 0)
                 },
-                '24h': {
-                    'buys': pair_data.get('txns', {}).get('h24', {}).get('buys', 0),
-                    'sells': pair_data.get('txns', {}).get('h24', {}).get('sells', 0)
-                }
-            },
+                
+                # Trading activity
+                'transactions': {
+                    '5m': {
+                        'buys': pair_data.get('txns', {}).get('m5', {}).get('buys', 0),
+                        'sells': pair_data.get('txns', {}).get('m5', {}).get('sells', 0)
+                    },
+                    '1h': {
+                        'buys': pair_data.get('txns', {}).get('h1', {}).get('buys', 0),
+                        'sells': pair_data.get('txns', {}).get('h1', {}).get('sells', 0)
+                    },
+                    '6h': {
+                        'buys': pair_data.get('txns', {}).get('h6', {}).get('buys', 0),
+                        'sells': pair_data.get('txns', {}).get('h6', {}).get('sells', 0)
+                    },
+                    '24h': {
+                        'buys': pair_data.get('txns', {}).get('h24', {}).get('buys', 0),
+                        'sells': pair_data.get('txns', {}).get('h24', {}).get('sells', 0)
+                    }
+                },
+                
+                # Volume data
+                'volume': {
+                    '5m': pair_data.get('volume', {}).get('m5', 0),
+                    '1h': pair_data.get('volume', {}).get('h1', 0),
+                    '6h': pair_data.get('volume', {}).get('h6', 0),
+                    '24h': pair_data.get('volume', {}).get('h24', 0)
+                },
+                
+                # Liquidity metrics
+                'liquidity': {
+                    'usd': pair_data.get('liquidity', {}).get('usd', 0),
+                    'base': pair_data.get('liquidity', {}).get('base', 0),
+                    'quote': pair_data.get('liquidity', {}).get('quote', 0)
+                },
+                
+                # Market metrics
+                'market_cap': pair_data.get('marketCap', 0),
+                'fdv': pair_data.get('fdv', 0),
+                
+                # Creation time
+                'created_at': pair_data.get('pairCreatedAt', 0),
+                
+                # Social links
+                'social_links': [social.get('url') for social in pair_data.get('info', {}).get('socials', [])]
+            }
             
-            # Volume data
-            'volume': {
-                '5m': pair_data.get('volume', {}).get('m5', 0),
-                '1h': pair_data.get('volume', {}).get('h1', 0),
-                '6h': pair_data.get('volume', {}).get('h6', 0),
-                '24h': pair_data.get('volume', {}).get('h24', 0)
-            },
-            
-            # Liquidity metrics
-            'liquidity': {
-                'usd': pair_data.get('liquidity', {}).get('usd', 0),
-                'base': pair_data.get('liquidity', {}).get('base', 0),
-                'quote': pair_data.get('liquidity', {}).get('quote', 0)
-            },
-            
-            # Market metrics
-            'market_cap': pair_data.get('marketCap', 0),
-            'fdv': pair_data.get('fdv', 0),
-            
-            # Creation time
-            'created_at': pair_data.get('pairCreatedAt', 0),
-            
-            # Social links
-            'social_links': [social.get('url') for social in pair_data.get('info', {}).get('socials', [])]
-        }
-        
-        cprint(f"✅ Successfully fetched pair analytics for {pair_address[:8]}", "green")
-        return analytics
+            cprint(f"✅ Successfully fetched pair analytics for {pair_address[:8]}", "green")
+            return analytics
 
-    except Exception as e:
-        cprint(f"❌ Error getting pair analytics: {str(e)}", "red")
-        return None
+        except requests.exceptions.Timeout:
+            cprint(f"⚠️ Attempt {attempt + 1}/{max_retries}: DexScreener API timeout", "yellow")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            cprint("❌ All retry attempts failed", "red")
+            return None
+        except requests.exceptions.ConnectionError:
+            cprint(f"⚠️ Attempt {attempt + 1}/{max_retries}: Connection error to DexScreener API", "yellow")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            cprint("❌ All retry attempts failed", "red")
+            return None
+        except Exception as e:
+            cprint(f"❌ Error getting pair analytics: {str(e)}", "red")
+            return None

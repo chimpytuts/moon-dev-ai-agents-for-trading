@@ -36,6 +36,22 @@ class TradingAgent:
                 print(f"⚠️ Skipping analysis for excluded token: {token}")
                 return None
             
+            # Debug: Print market_data info
+            cprint("\nℹ️ Market Data Debug:", "cyan")
+            cprint(f"Columns: {market_data.columns.tolist()}", "cyan")
+            cprint(f"Shape: {market_data.shape}", "cyan")
+            
+            # Convert column names to lowercase for consistency
+            market_data.columns = market_data.columns.str.lower()
+            
+            # Verify required columns exist
+            required_columns = ['close', 'volume', 'ma20', 'ma40', 'rsi']
+            missing_columns = [col for col in required_columns if col not in market_data.columns]
+            
+            if missing_columns:
+                cprint(f"❌ Missing required columns: {missing_columns}", "red")
+                return None
+            
             # Get highest liquidity market
             market_address = get_highest_liquidity_market(token)
             if not market_address:
@@ -48,10 +64,29 @@ class TradingAgent:
                 cprint("❌ No pair analytics found", "red")
                 return None
             
-            # Prepare combined data for AI analysis
+            # Convert DataFrame to dict and prepare combined data for AI analysis
+            try:
+                market_data_dict = {
+                    'ohlcv': market_data.to_dict(orient='records'),
+                    'technical_indicators': {
+                        'ma20': market_data['ma20'].tolist(),
+                        'ma40': market_data['ma40'].tolist(),
+                        'rsi': market_data['rsi'].tolist(),
+                        'latest_close': float(market_data['close'].iloc[-1]),
+                        'latest_volume': float(market_data['volume'].iloc[-1]),
+                        'latest_rsi': float(market_data['rsi'].iloc[-1]),
+                        'latest_ma20': float(market_data['ma20'].iloc[-1]),
+                        'latest_ma40': float(market_data['ma40'].iloc[-1]),
+                    }
+                }
+            except Exception as e:
+                cprint(f"❌ Error converting market data: {str(e)}", "red")
+                cprint(f"Market data head:\n{market_data.head()}", "yellow")
+                return None
+            
             analysis_data = {
                 "token_address": token,
-                "market_data": market_data,
+                "market_data": market_data_dict,
                 "pair_analytics": pair_analytics
             }
             
@@ -340,8 +375,9 @@ Example format:
                         
             # Then proceed with new allocations
             cprint("\n💰 Calculating optimal portfolio allocation...", "white", "on_blue")
-            allocation = self.allocate_portfolio()
-            
+            # allocation = self.allocate_portfolio()
+            allocation = {}
+
             if allocation:
                 cprint("\n💼 Moon Dev's Portfolio Allocation:", "white", "on_blue")
                 print(json.dumps(allocation, indent=4))
