@@ -77,7 +77,7 @@ src/agents/api_data
 cookies.json
 data/
 testnet.py
-src/agents/chimpytuts_agents/prompts/*
+src/chimpytuts_agents/prompts/*
 
 /Users/md/Dropbox/dev/github/moon-dev-ai-agents-for-trading/src/data
 

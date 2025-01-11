@@ -19,91 +19,7 @@ import atexit
 import pytz
 from solders.pubkey import Pubkey
 
-BIRDEYE_URL = "https://public-api.birdeye.so/defi"
-BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY")
-if not BIRDEYE_API_KEY:
-    raise ValueError("🚨 BIRDEYE_API_KEY not found in environment variables!")
-
-def token_overview_since_creation(address, creation_timestamp):
-    """
-    Fetch token overview data from Birdeye, filtered based on creation time
-    
-    Args:
-        address (str): Token address
-        creation_timestamp (int): Unix timestamp of token creation
-    
-    Returns:
-        dict: Filtered overview data or None if failed
-    """
-    try:
-        # Make API request to Birdeye
-        overview_url = f"{BIRDEYE_URL}/token_overview?address={address}"
-        headers = {"X-API-KEY": BIRDEYE_API_KEY}
-        
-        response = requests.get(overview_url, headers=headers)
-        if response.status_code != 200:
-            cprint(f"❌ Failed to retrieve token overview: HTTP {response.status_code}", "red")
-            return None
-
-        overview_data = response.json().get('data', {})
-        
-        # Calculate how many hours old the token is
-        current_time = int(time.time())
-        hours_since_creation = (current_time - creation_timestamp) / 3600
-
-        # Define available time windows in hours
-        time_windows = [0.5, 1, 2, 4, 6, 8, 12, 24]
-        
-        # Find which metrics we should keep based on token age
-        valid_windows = [w for w in time_windows if w <= hours_since_creation]
-        
-        if not valid_windows:
-            cprint("⚠️ Token too new for historical metrics", "yellow")
-            return {
-                'price_usd': overview_data.get('price', 0),
-                'mc': overview_data.get('realMc', 0),
-                'total_supply': overview_data.get('supply', 0),
-                'circulating_supply': overview_data.get('circulatingSupply', 0),
-            }
-
-        # Create filtered data with base metrics
-        filtered_data = {
-            'price_usd': overview_data.get('price', 0),
-            'mc': overview_data.get('realMc', 0),
-            'total_supply': overview_data.get('supply', 0),
-            'circulating_supply': overview_data.get('circulatingSupply', 0),
-        }
-
-        # Map time windows to their metric suffixes
-        window_suffixes = {
-            0.5: '30m',
-            1: '1h',
-            2: '2h',
-            4: '4h',
-            6: '6h',
-            8: '8h',
-            12: '12h',
-            24: '24h'
-        }
-
-        # Keep only metrics for valid time windows
-        for window in valid_windows:
-            suffix = window_suffixes[window]
-            
-            # Trading metrics
-            filtered_data[f'buy{suffix}'] = overview_data.get(f'buy{suffix}', 0)
-            filtered_data[f'sell{suffix}'] = overview_data.get(f'sell{suffix}', 0)
-            filtered_data[f'vBuy{suffix}USD'] = overview_data.get(f'vBuy{suffix}USD', 0)
-            filtered_data[f'vSell{suffix}USD'] = overview_data.get(f'vSell{suffix}USD', 0)
-            filtered_data[f'uniqueWallet{suffix}'] = overview_data.get(f'uniqueWallet{suffix}', 0)
-            filtered_data[f'price_change_{suffix}'] = overview_data.get(f'priceChange{suffix}Percent', 0)
-
-        cprint(f"✅ Retrieved metrics for time windows: {[window_suffixes[w] for w in valid_windows]}", "green")
-        return filtered_data
-
-    except Exception as e:
-        cprint(f"❌ Error in token_overview_since_creation: {str(e)}", "red")
-        return None
+RUG_CHECK_URL = "https://api.rugcheck.xyz"	
 
 def collect_token_data(token, days_back=DAYSBACK_4_DATA, timeframe=DATA_TIMEFRAME):
     """Collect OHLCV data for a single token"""
@@ -229,3 +145,154 @@ def get_data(address, days_back_4_data, timeframe):
         if response.status_code == 401:
             print("🔑 Check your BIRDEYE_API_KEY in .env file!")
         return pd.DataFrame()
+
+def get_highest_liquidity_market(token_address):
+    """
+    Get the market address with highest base price for a given token using Rugcheck API
+    
+    Args:
+        token_address (str): Token address to check
+        
+    Returns:
+        str: Market address with highest liquidity or None if not found
+    """
+    try:
+        rugcheck_url = f"{RUG_CHECK_URL}/v1/tokens/{token_address}/report"
+        rugcheck_response = requests.get(rugcheck_url)
+        
+        if rugcheck_response.status_code != 200:
+            cprint(f"❌ Failed to get rugcheck report: HTTP {rugcheck_response.status_code}", "red")
+            return None
+            
+        rugcheck_data = rugcheck_response.json()
+        
+        if 'markets' not in rugcheck_data:
+            cprint("❌ No markets data found", "red")
+            return None
+            
+        highest_base_price = 0
+        market_address = None
+        
+        # Find the Raydium market with highest base price
+        for market in rugcheck_data['markets']:
+            if market.get('marketType') == 'raydium' and 'lp' in market:
+                base_price = float(market['lp'].get('basePrice', 0))
+                if base_price > highest_base_price:
+                    highest_base_price = base_price
+                    market_address = market.get('pubkey')
+        
+        if market_address:
+            cprint(f"✅ Found market with highest liquidity: {market_address}", "green")
+        else:
+            cprint("❌ No valid market found", "red")
+            
+        return market_address
+
+    except Exception as e:
+        cprint(f"❌ Error getting market address: {str(e)}", "red")
+        return None
+
+def get_pair_analytics(pair_address):
+    """
+    Fetch and process trading analytics for a pair from DexScreener API
+    
+    Args:
+        pair_address (str): The pair address to analyze
+        
+    Returns:
+        dict: Processed trading metrics or None if failed
+    """
+    try:
+        # Make API request to DexScreener
+        dexscreener_url = f"https://api.dexscreener.com/latest/dex/pairs/solana/{pair_address}"
+        response = requests.get(dexscreener_url)
+        
+        if response.status_code != 200:
+            cprint(f"❌ Failed to get pair data: HTTP {response.status_code}", "red")
+            return None
+            
+        data = response.json()
+        pair_data = data.get('pairs', [{}])[0]  # Get first pair from pairs array
+        
+        if not pair_data:
+            cprint("❌ No pair data found", "red")
+            return None
+            
+        # Extract relevant metrics
+        analytics = {
+            # Basic pair info
+            'dex': pair_data.get('dexId'),
+            'base_token': {
+                'address': pair_data.get('baseToken', {}).get('address'),
+                'symbol': pair_data.get('baseToken', {}).get('symbol'),
+                'name': pair_data.get('baseToken', {}).get('name')
+            },
+            'quote_token': {
+                'address': pair_data.get('quoteToken', {}).get('address'),
+                'symbol': pair_data.get('quoteToken', {}).get('symbol')
+            },
+            
+            # Price data
+            'price_usd': float(pair_data.get('priceUsd', 0)),
+            'price_native': float(pair_data.get('priceNative', 0)),
+            
+            # Price changes
+            'price_change': {
+                '5m': pair_data.get('priceChange', {}).get('m5', 0),
+                '1h': pair_data.get('priceChange', {}).get('h1', 0),
+                '6h': pair_data.get('priceChange', {}).get('h6', 0),
+                '24h': pair_data.get('priceChange', {}).get('h24', 0)
+            },
+            
+            # Trading activity
+            'transactions': {
+                '5m': {
+                    'buys': pair_data.get('txns', {}).get('m5', {}).get('buys', 0),
+                    'sells': pair_data.get('txns', {}).get('m5', {}).get('sells', 0)
+                },
+                '1h': {
+                    'buys': pair_data.get('txns', {}).get('h1', {}).get('buys', 0),
+                    'sells': pair_data.get('txns', {}).get('h1', {}).get('sells', 0)
+                },
+                '6h': {
+                    'buys': pair_data.get('txns', {}).get('h6', {}).get('buys', 0),
+                    'sells': pair_data.get('txns', {}).get('h6', {}).get('sells', 0)
+                },
+                '24h': {
+                    'buys': pair_data.get('txns', {}).get('h24', {}).get('buys', 0),
+                    'sells': pair_data.get('txns', {}).get('h24', {}).get('sells', 0)
+                }
+            },
+            
+            # Volume data
+            'volume': {
+                '5m': pair_data.get('volume', {}).get('m5', 0),
+                '1h': pair_data.get('volume', {}).get('h1', 0),
+                '6h': pair_data.get('volume', {}).get('h6', 0),
+                '24h': pair_data.get('volume', {}).get('h24', 0)
+            },
+            
+            # Liquidity metrics
+            'liquidity': {
+                'usd': pair_data.get('liquidity', {}).get('usd', 0),
+                'base': pair_data.get('liquidity', {}).get('base', 0),
+                'quote': pair_data.get('liquidity', {}).get('quote', 0)
+            },
+            
+            # Market metrics
+            'market_cap': pair_data.get('marketCap', 0),
+            'fdv': pair_data.get('fdv', 0),
+            
+            # Creation time
+            'created_at': pair_data.get('pairCreatedAt', 0),
+            
+            # Social links
+            'social_links': [social.get('url') for social in pair_data.get('info', {}).get('socials', [])]
+        }
+        
+        cprint(f"✅ Successfully fetched pair analytics for {pair_address[:8]}", "green")
+        return analytics
+
+    except Exception as e:
+        cprint(f"❌ Error getting pair analytics: {str(e)}", "red")
+        return None

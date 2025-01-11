@@ -18,7 +18,7 @@ from src import nice_funcs as n
 from .utils.trading_agent_utils import collect_all_tokens
 from .prompts.trading_prompt import TRADING_PROMPT  # Added this import
 from .prompts.trading_prompt import ALLOCATION_PROMPT  # Added this import
-
+from .utils.trading_agent_utils import get_highest_liquidity_market, get_pair_analytics
 # Load environment variables
 load_dotenv()
 
@@ -36,6 +36,25 @@ class TradingAgent:
                 print(f"⚠️ Skipping analysis for excluded token: {token}")
                 return None
             
+            # Get highest liquidity market
+            market_address = get_highest_liquidity_market(token)
+            if not market_address:
+                cprint("❌ No valid market found for analysis", "red")
+                return None
+            
+            # Get pair analytics
+            pair_analytics = get_pair_analytics(market_address)
+            if not pair_analytics:
+                cprint("❌ No pair analytics found", "red")
+                return None
+            
+            # Prepare combined data for AI analysis
+            analysis_data = {
+                "token_address": token,
+                "market_data": market_data,
+                "pair_analytics": pair_analytics
+            }
+            
             message = self.client.messages.create(
                 model=AI_MODEL,
                 max_tokens=AI_MAX_TOKENS,
@@ -43,7 +62,7 @@ class TradingAgent:
                 messages=[
                     {
                         "role": "user", 
-                        "content": f"{TRADING_PROMPT}\n\nMarket Data to Analyze:\n{market_data}"
+                        "content": f"{TRADING_PROMPT}\n\nData to Analyze:\n{json.dumps(analysis_data, indent=2)}"
                     }
                 ]
             )
